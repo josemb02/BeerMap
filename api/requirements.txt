@@ -1,0 +1,16 @@
+fastapi[email]
+uvicorn[standard]
+python-dotenv
+
+sqlalchemy
+psycopg2-binary
+
+jinja2
+python-multipart
+
+passlib[bcrypt]
+python-jose[cryptography]
+email-validator
+
+pytest
+httpx

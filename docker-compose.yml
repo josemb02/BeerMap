@@ -1,0 +1,83 @@
+services:
+  api:
+    build: ./api
+    restart: unless-stopped
+
+    # Expongo SOLO la API hacia mi PC
+    ports:
+      - "8000:8000"
+
+    env_file:
+      - .env
+
+    # =========================
+    # HARDENING (SEGURIDAD)
+    # =========================
+    read_only: true
+    tmpfs:
+      - /tmp
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+
+    depends_on:
+      db:
+        condition: service_healthy
+
+    # Límites (compose clásico)
+    cpus: "0.50"
+    mem_limit: "256m"
+
+  db:
+    image: postgres:15-alpine
+    restart: unless-stopped
+
+    env_file:
+      - .env
+
+    volumes:
+      # Persistencia real de la BD
+      - beermap_postgres_data:/var/lib/postgresql/data
+
+      # ✅ IMPORTANTE: ejecuta tus scripts al crear la BD por primera vez
+      # (tu archivo: ./api/db/001_init.sql)
+      - ./api/db:/docker-entrypoint-initdb.d:ro
+
+    # No expongo Postgres al exterior (solo red interna Docker)
+    # ports:
+    #   - "5432:5432"
+
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $$POSTGRES_USER -d $$POSTGRES_DB"]
+      interval: 10s
+      timeout: 3s
+      retries: 10
+
+  adminer:
+    image: adminer:4
+    restart: unless-stopped
+
+    ports:
+      - "8081:8080"
+
+    depends_on:
+      db:
+        condition: service_healthy
+
+  web:
+    build: ./web
+    restart: unless-stopped
+
+    ports:
+      - "5000:5000"
+
+    env_file:
+      - .env
+
+    depends_on:
+      api:
+        condition: service_started
+
+volumes:
+  beermap_postgres_data:
