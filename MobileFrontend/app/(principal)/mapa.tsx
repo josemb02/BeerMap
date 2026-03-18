@@ -2,7 +2,9 @@ import { useCallback, useEffect, useState } from "react";
 import {
     ActivityIndicator,
     Alert,
+    KeyboardAvoidingView,
     Modal,
+    Platform,
     Pressable,
     SafeAreaView,
     ScrollView,
@@ -31,7 +33,31 @@ type Grupo = {
     join_code: string;
 };
 
-// ─────────────────────────────────────────────────────────────────────────────
+const ICONOS = [
+    { id: "jarra",  emoji: "🍺", label: "Jarra" },
+    { id: "doble",  emoji: "🍻", label: "Brindis" },
+    { id: "refresco", emoji: "🥤", label: "Refresco" },
+];
+
+
+// ─── Estilo mapa mudo ─────────────────────────────────────────────────────────
+
+const MAPA_ESTILO = [
+    { elementType: "geometry",             stylers: [{ color: "#ebe8e0" }] },
+    { elementType: "labels",               stylers: [{ visibility: "off" }] },
+    { elementType: "labels.icon",          stylers: [{ visibility: "off" }] },
+    { featureType: "administrative",       elementType: "geometry", stylers: [{ visibility: "off" }] },
+    { featureType: "administrative.locality", elementType: "labels.text.fill", stylers: [{ visibility: "on" }, { color: "#8A9BB0" }] },
+    { featureType: "administrative.locality", elementType: "labels.text.stroke", stylers: [{ color: "#ebe8e0" }] },
+    { featureType: "poi",                  stylers: [{ visibility: "off" }] },
+    { featureType: "road",                 elementType: "geometry", stylers: [{ color: "#ffffff" }] },
+    { featureType: "road",                 elementType: "geometry.stroke", stylers: [{ color: "#ddd9d0" }] },
+    { featureType: "road",                 elementType: "labels", stylers: [{ visibility: "off" }] },
+    { featureType: "road.highway",         elementType: "geometry", stylers: [{ color: "#f0ece4" }] },
+    { featureType: "transit",              stylers: [{ visibility: "off" }] },
+    { featureType: "water",                elementType: "geometry", stylers: [{ color: "#c5d5e8" }] },
+    { featureType: "landscape.natural",    elementType: "geometry", stylers: [{ color: "#e4e0d8" }] },
+];
 
 export default function Mapa() {
     const { token, usuario } = usarAuth();
@@ -79,18 +105,13 @@ export default function Mapa() {
     const region = ubicacionActual
         ? { ...ubicacionActual, latitudeDelta: 0.05, longitudeDelta: 0.05 }
         : checkins.length > 0
-        ? {
-            latitude: Number(checkins[0].lat),
-            longitude: Number(checkins[0].lng),
-            latitudeDelta: 0.05,
-            longitudeDelta: 0.05,
-          }
+        ? { latitude: Number(checkins[0].lat), longitude: Number(checkins[0].lng), latitudeDelta: 0.05, longitudeDelta: 0.05 }
         : { latitude: 40.4168, longitude: -3.7038, latitudeDelta: 0.5, longitudeDelta: 0.5 };
 
     return (
         <SafeAreaView style={s.root}>
 
-            {/* ── Cabecera ── */}
+            {/* Cabecera */}
             <View style={s.header}>
                 <View>
                     <Text style={s.headerNombre}>{usuario?.username}</Text>
@@ -102,27 +123,27 @@ export default function Mapa() {
                 </View>
             </View>
 
-            {/* ── Stats ── */}
+            {/* Stats */}
             <View style={s.statsRow}>
                 <View style={s.statItem}>
                     <Text style={s.statNum}>{checkins.length}</Text>
-                    <Text style={s.statLabel}>CERVEZAS</Text>
+                    <Text style={s.statLabel}>cervezas</Text>
                 </View>
                 <View style={s.statDivider} />
                 <View style={s.statItem}>
-                    <Text style={s.statNum}>{totalGastado.toFixed(2)}€</Text>
-                    <Text style={s.statLabel}>GASTADO</Text>
+                    <Text style={s.statNum}>{totalGastado.toFixed(2)}<Text style={s.statNumSuffix}>€</Text></Text>
+                    <Text style={s.statLabel}>gastado</Text>
                 </View>
                 <View style={s.statDivider} />
                 <View style={s.statItem}>
                     <Text style={s.statNum}>
                         {new Set(checkins.map(c => `${Number(c.lat).toFixed(2)},${Number(c.lng).toFixed(2)}`)).size}
                     </Text>
-                    <Text style={s.statLabel}>LUGARES</Text>
+                    <Text style={s.statLabel}>lugares</Text>
                 </View>
             </View>
 
-            {/* ── Mapa ── */}
+            {/* Mapa */}
             {cargando ? (
                 <View style={s.mapaPlaceholder}>
                     <ActivityIndicator color="#10233E" />
@@ -135,6 +156,10 @@ export default function Mapa() {
                         initialRegion={region}
                         showsUserLocation
                         showsMyLocationButton={false}
+                        showsPointsOfInterest={false}
+                        showsBuildings={false}
+                        showsTraffic={false}
+                        customMapStyle={MAPA_ESTILO}
                     >
                         {checkins.map((c, i) => (
                             <Marker
@@ -147,21 +172,15 @@ export default function Mapa() {
                                 description={c.precio ? `${Number(c.precio).toFixed(2)}€` : undefined}
                             >
                                 <View style={s.marker}>
-                                    <Text style={s.markerText}>🍺</Text>
+                                    <Text style={s.markerEmoji}>🍺</Text>
                                 </View>
                             </Marker>
                         ))}
                     </MapView>
-
-                    {checkins.length === 0 && (
-                        <View style={s.mapaEmpty}>
-                            <Text style={s.mapaEmptyText}>Sin registros aún</Text>
-                        </View>
-                    )}
                 </View>
             )}
 
-            {/* ── FAB ── */}
+            {/* FAB */}
             <Pressable
                 style={({ pressed }) => [s.fab, pressed && s.fabPressed]}
                 onPress={() => setModalCheckin(true)}
@@ -191,6 +210,7 @@ function ModalCheckin({ visible, token, onCerrar, onExito }: {
     const [nota, setNota] = useState("");
     const [grupos, setGrupos] = useState<Grupo[]>([]);
     const [grupoSeleccionado, setGrupoSeleccionado] = useState<string | null>(null);
+    const [iconoSeleccionado, setIconoSeleccionado] = useState("jarra");
     const [enviando, setEnviando] = useState(false);
     const [faseEnvio, setFaseEnvio] = useState("");
 
@@ -212,7 +232,7 @@ function ModalCheckin({ visible, token, onCerrar, onExito }: {
             setFaseEnvio("Obteniendo ubicación...");
             const { status } = await Location.requestForegroundPermissionsAsync();
             if (status !== "granted") {
-                Alert.alert("Permiso denegado", "Necesitamos acceso a tu ubicación para registrar la cerveza.");
+                Alert.alert("Permiso denegado", "Necesitamos acceso a tu ubicación.");
                 setEnviando(false);
                 return;
             }
@@ -238,7 +258,7 @@ function ModalCheckin({ visible, token, onCerrar, onExito }: {
 
             await hacerPeticion("/checkins", { metodo: "POST", token, body });
 
-            setPrecio(""); setNota(""); setGrupoSeleccionado(null);
+            setPrecio(""); setNota(""); setGrupoSeleccionado(null); setIconoSeleccionado("jarra");
             onExito();
         } catch (e: any) {
             Alert.alert("Error", e?.message || "No se pudo registrar");
@@ -249,82 +269,107 @@ function ModalCheckin({ visible, token, onCerrar, onExito }: {
     }
 
     return (
-        <Modal visible={visible} animationType="slide" transparent>
-            <View style={s.overlay}>
-                <View style={s.sheet}>
-                    <View style={s.handle} />
-                    <View style={s.sheetHeader}>
-                        <Text style={s.sheetTitulo}>Nueva cerveza</Text>
-                        <Pressable onPress={onCerrar} disabled={enviando}>
-                            <Ionicons name="close" size={22} color="#4E5968" />
-                        </Pressable>
-                    </View>
+        <Modal visible={visible} animationType="slide" transparent statusBarTranslucent>
+            <KeyboardAvoidingView
+                style={{ flex: 1 }}
+                behavior={Platform.OS === "ios" ? "padding" : "height"}
+                keyboardVerticalOffset={0}
+            >
+                <Pressable style={s.overlay} onPress={onCerrar}>
+                    <Pressable style={s.sheet} onPress={() => {}}>
+                        <View style={s.handle} />
 
-                    <ScrollView showsVerticalScrollIndicator={false}>
-                        <View style={s.ubicRow}>
-                            <Ionicons name="location-outline" size={16} color="#6B85A8" />
-                            <Text style={s.ubicTexto}>Se usará tu ubicación actual</Text>
+                        <View style={s.sheetHeader}>
+                            <Text style={s.sheetTitulo}>Nueva cerveza</Text>
+                            <Pressable onPress={onCerrar} disabled={enviando} style={s.closeBtn}>
+                                <Ionicons name="close" size={20} color="#4E5968" />
+                            </Pressable>
                         </View>
 
-                        <Text style={s.fieldLabel}>Precio (opcional)</Text>
-                        <View style={s.precioRow}>
-                            <TextInput
-                                value={precio}
-                                onChangeText={setPrecio}
-                                placeholder="0.00"
-                                placeholderTextColor="#B0BAC8"
-                                keyboardType="decimal-pad"
-                                style={[s.input, { flex: 1 }]}
-                            />
-                            <Text style={s.euroSign}>€</Text>
-                        </View>
-
-                        <Text style={s.fieldLabel}>Nota (opcional)</Text>
-                        <TextInput
-                            value={nota}
-                            onChangeText={setNota}
-                            placeholder="¿Qué cerveza es?"
-                            placeholderTextColor="#B0BAC8"
-                            maxLength={180}
-                            multiline
-                            style={[s.input, s.inputMulti]}
-                        />
-
-                        {grupos.length > 0 && (
-                            <>
-                                <Text style={s.fieldLabel}>Asociar a grupo</Text>
-                                {grupos.map(g => (
+                        <ScrollView
+                            showsVerticalScrollIndicator={false}
+                            keyboardShouldPersistTaps="handled"
+                        >
+                            {/* Selector de icono */}
+                            <Text style={s.fieldLabel}>Elige tu icono</Text>
+                            <View style={s.iconosRow}>
+                                {ICONOS.map(ic => (
                                     <Pressable
-                                        key={g.id}
-                                        style={[s.grupoRow, grupoSeleccionado === g.id && s.grupoRowActivo]}
-                                        onPress={() => setGrupoSeleccionado(grupoSeleccionado === g.id ? null : g.id)}
+                                        key={ic.id}
+                                        style={[s.iconoBtn, iconoSeleccionado === ic.id && s.iconoBtnActivo]}
+                                        onPress={() => setIconoSeleccionado(ic.id)}
                                     >
-                                        <Text style={[s.grupoNombre, grupoSeleccionado === g.id && s.grupoNombreActivo]}>
-                                            {g.name}
+                                        <Text style={s.iconoEmoji}>{ic.emoji}</Text>
+                                        <Text style={[s.iconoLabel, iconoSeleccionado === ic.id && s.iconoLabelActivo]}>
+                                            {ic.label}
                                         </Text>
-                                        {grupoSeleccionado === g.id &&
-                                            <Ionicons name="checkmark" size={16} color="#FFFFFF" />}
                                     </Pressable>
                                 ))}
-                            </>
-                        )}
+                            </View>
 
-                        <Pressable
-                            style={({ pressed }) => [s.btnPrimary, enviando && s.btnDisabled, pressed && s.btnPressed]}
-                            onPress={enviar}
-                            disabled={enviando}
-                        >
-                            {enviando
-                                ? <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
-                                    <ActivityIndicator color="#fff" size="small" />
-                                    <Text style={s.btnLabel}>{faseEnvio}</Text>
-                                  </View>
-                                : <Text style={s.btnLabel}>Registrar</Text>
-                            }
-                        </Pressable>
-                    </ScrollView>
-                </View>
-            </View>
+                            {/* Precio */}
+                            <Text style={s.fieldLabel}>Precio (opcional)</Text>
+                            <View style={s.precioRow}>
+                                <TextInput
+                                    value={precio}
+                                    onChangeText={setPrecio}
+                                    placeholder="0.00"
+                                    placeholderTextColor="#B0BAC8"
+                                    keyboardType="decimal-pad"
+                                    style={[s.input, { flex: 1 }]}
+                                />
+                                <Text style={s.euroSign}>€</Text>
+                            </View>
+
+                            {/* Nota */}
+                            <Text style={s.fieldLabel}>Nota (opcional)</Text>
+                            <TextInput
+                                value={nota}
+                                onChangeText={setNota}
+                                placeholder="¿Qué cerveza es?"
+                                placeholderTextColor="#B0BAC8"
+                                maxLength={180}
+                                multiline
+                                style={[s.input, s.inputMulti]}
+                            />
+
+                            {/* Grupos */}
+                            {grupos.length > 0 && (
+                                <>
+                                    <Text style={s.fieldLabel}>Asociar a grupo</Text>
+                                    {grupos.map(g => (
+                                        <Pressable
+                                            key={g.id}
+                                            style={[s.grupoRow, grupoSeleccionado === g.id && s.grupoRowActivo]}
+                                            onPress={() => setGrupoSeleccionado(grupoSeleccionado === g.id ? null : g.id)}
+                                        >
+                                            <Text style={[s.grupoNombre, grupoSeleccionado === g.id && s.grupoNombreActivo]}>
+                                                {g.name}
+                                            </Text>
+                                            {grupoSeleccionado === g.id &&
+                                                <Ionicons name="checkmark" size={16} color="#FFFFFF" />}
+                                        </Pressable>
+                                    ))}
+                                </>
+                            )}
+
+                            <Pressable
+                                style={({ pressed }) => [s.btnPrimary, enviando && s.btnDisabled, pressed && s.btnPressed]}
+                                onPress={enviar}
+                                disabled={enviando}
+                            >
+                                {enviando
+                                    ? <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
+                                        <ActivityIndicator color="#fff" size="small" />
+                                        <Text style={s.btnLabel}>{faseEnvio}</Text>
+                                      </View>
+                                    : <Text style={s.btnLabel}>Registrar</Text>
+                                }
+                            </Pressable>
+                        </ScrollView>
+                    </Pressable>
+                </Pressable>
+            </KeyboardAvoidingView>
         </Modal>
     );
 }
@@ -350,47 +395,43 @@ const s = StyleSheet.create({
 
     statsRow: {
         flexDirection: "row",
-        marginHorizontal: 24,
-        borderTopWidth: 1,
-        borderBottomWidth: 1,
-        borderColor: "#E2E8F0",
-        paddingVertical: 14,
-        marginBottom: 16,
+        marginHorizontal: 20,
+        borderRadius: 14,
+        backgroundColor: "#FFFFFF",
+        paddingVertical: 16,
+        marginBottom: 14,
+        shadowColor: "#10233E",
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.06,
+        shadowRadius: 8,
+        elevation: 2,
     },
-    statItem: { flex: 1, alignItems: "center" },
-    statNum: { fontSize: 17, fontWeight: "700", color: "#10233E" },
-    statLabel: { fontSize: 10, color: "#6B85A8", marginTop: 2, letterSpacing: 0.6 },
-    statDivider: { width: 1, backgroundColor: "#E2E8F0" },
+    statItem: { flex: 1, alignItems: "center", gap: 2 },
+    statNum: { fontSize: 22, fontWeight: "700", color: "#10233E", letterSpacing: -0.5 },
+    statNumSuffix: { fontSize: 14, fontWeight: "500", color: "#6B85A8" },
+    statLabel: { fontSize: 11, color: "#9AAABB", letterSpacing: 0.2 },
+    statDivider: { width: 1, backgroundColor: "#E2E8F0", marginVertical: 4 },
 
     mapaContenedor: { flex: 1, marginHorizontal: 16, marginBottom: 16, borderRadius: 16, overflow: "hidden" },
     mapa: { flex: 1 },
     mapaPlaceholder: { flex: 1, justifyContent: "center", alignItems: "center" },
-    mapaEmpty: {
-        position: "absolute",
-        bottom: 16,
-        left: 16,
-        right: 16,
-        backgroundColor: "rgba(255,255,255,0.92)",
-        borderRadius: 10,
-        padding: 12,
-        alignItems: "center",
-    },
-    mapaEmptyText: { fontSize: 13, color: "#6B85A8" },
 
     marker: {
-        width: 36,
-        height: 36,
-        borderRadius: 18,
+        width: 42,
+        height: 42,
+        borderRadius: 21,
         backgroundColor: "#FFFFFF",
         justifyContent: "center",
         alignItems: "center",
         shadowColor: "#000",
         shadowOffset: { width: 0, height: 2 },
-        shadowOpacity: 0.2,
-        shadowRadius: 4,
-        elevation: 4,
+        shadowOpacity: 0.15,
+        shadowRadius: 5,
+        elevation: 5,
+        borderWidth: 1.5,
+        borderColor: "#E2E8F0",
     },
-    markerText: { fontSize: 18 },
+    markerEmoji: { fontSize: 22 },
 
     fab: {
         position: "absolute",
@@ -413,20 +454,38 @@ const s = StyleSheet.create({
     overlay: { flex: 1, backgroundColor: "rgba(0,0,0,0.4)", justifyContent: "flex-end" },
     sheet: {
         backgroundColor: "#FFFFFF",
-        borderTopLeftRadius: 20,
-        borderTopRightRadius: 20,
+        borderTopLeftRadius: 24,
+        borderTopRightRadius: 24,
         padding: 24,
         paddingTop: 12,
-        maxHeight: "85%",
+        maxHeight: "88%",
     },
-    handle: { width: 36, height: 4, borderRadius: 2, backgroundColor: "#D8DEE8", alignSelf: "center", marginBottom: 16 },
-    sheetHeader: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 20 },
-    sheetTitulo: { fontSize: 17, fontWeight: "700", color: "#10233E" },
+    handle: { width: 40, height: 4, borderRadius: 2, backgroundColor: "#E2E8F0", alignSelf: "center", marginBottom: 18 },
+    sheetHeader: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 24 },
+    sheetTitulo: { fontSize: 18, fontWeight: "700", color: "#10233E", letterSpacing: -0.3 },
+    closeBtn: { padding: 4 },
 
-    ubicRow: { flexDirection: "row", alignItems: "center", gap: 6, marginBottom: 20 },
-    ubicTexto: { fontSize: 13, color: "#6B85A8" },
+    // Selector de icono
+    iconosRow: { flexDirection: "row", gap: 10, marginBottom: 20 },
+    iconoBtn: {
+        flex: 1,
+        alignItems: "center",
+        paddingVertical: 16,
+        gap: 6,
+        borderRadius: 12,
+        borderWidth: 1.5,
+        borderColor: "#E2E8F0",
+        backgroundColor: "#FAFAFA",
+    },
+    iconoBtnActivo: {
+        borderColor: "#10233E",
+        backgroundColor: "#10233E",
+    },
+    iconoLabel: { fontSize: 11, fontWeight: "600", color: "#6B85A8" },
+    iconoLabelActivo: { color: "#FFFFFF" },
 
-    fieldLabel: { fontSize: 13, fontWeight: "600", color: "#10233E", marginBottom: 8, marginTop: 4 },
+    fieldLabel: { fontSize: 12, fontWeight: "600", color: "#6B85A8", marginBottom: 8, letterSpacing: 0.4, textTransform: "uppercase" },
+
     input: {
         height: 48,
         borderWidth: 1,
@@ -457,9 +516,9 @@ const s = StyleSheet.create({
     grupoNombreActivo: { color: "#FFFFFF" },
 
     btnPrimary: {
-        height: 50,
+        height: 52,
         backgroundColor: "#10233E",
-        borderRadius: 10,
+        borderRadius: 12,
         justifyContent: "center",
         alignItems: "center",
         marginTop: 8,
@@ -467,5 +526,5 @@ const s = StyleSheet.create({
     },
     btnDisabled: { opacity: 0.6 },
     btnPressed: { opacity: 0.85 },
-    btnLabel: { color: "#FFFFFF", fontSize: 15, fontWeight: "700" },
+    btnLabel: { color: "#FFFFFF", fontSize: 15, fontWeight: "700", letterSpacing: 0.2 },
 });
