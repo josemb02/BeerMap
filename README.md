@@ -275,6 +275,11 @@ Optimizado mediante tabla de puntos acumulados.
 - Uso de ORM para evitar inyección SQL
 - Registro de acciones
 
+Además, se han aplicado medidas basadas en OWASP Top 10.
+
+👉 Ver documento completo de seguridad:
+[OWASP.md](./OWASP.md)
+
 ---
 
 ## Ejecución del proyecto
