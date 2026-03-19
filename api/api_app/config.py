@@ -53,6 +53,10 @@ class Settings:
         self.JWT_ALGORITHM = _get_env("JWT_ALGORITHM", "HS256")
         self.JWT_EXPIRE_MINUTES = int(_get_env("JWT_EXPIRE_MINUTES", "60"))
 
+        # Refresh tokens
+        # Duración del refresh token en días (por defecto 30 días)
+        self.REFRESH_TOKEN_EXPIRE_DAYS = int(_get_env("REFRESH_TOKEN_EXPIRE_DAYS", "30"))
+
         # Reglas de negocio (cooldown de check-in)
         self.CHECKIN_COOLDOWN_SECONDS = int(_get_env("CHECKIN_COOLDOWN_SECONDS", "300"))
 
@@ -87,6 +91,7 @@ JWT_SECRET = settings.JWT_SECRET
 JWT_ALGORITHM = settings.JWT_ALGORITHM
 JWT_EXPIRE_MINUTES = settings.JWT_EXPIRE_MINUTES
 
+REFRESH_TOKEN_EXPIRE_DAYS = settings.REFRESH_TOKEN_EXPIRE_DAYS
 CHECKIN_COOLDOWN_SECONDS = settings.CHECKIN_COOLDOWN_SECONDS
 CORS_ORIGINS = settings.CORS_ORIGINS
 

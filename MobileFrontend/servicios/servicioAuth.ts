@@ -81,6 +81,40 @@ export const registrarUsuario = async (
 };
 
 /*
+ * Este método renueva el access token enviando el refresh token al backend.
+ *
+ * Devuelve:
+ * - access_token nuevo
+ * - refresh_token nuevo (rotación de tokens)
+ */
+export const refrescarToken = async (refreshToken: string) => {
+    const respuesta = await hacerPeticion("/auth/refresh", {
+        metodo: "POST",
+        body: {
+            refresh_token: refreshToken
+        }
+    });
+
+    return respuesta;
+};
+
+/*
+ * Este método cierra la sesión en el backend revocando
+ * el refresh token del dispositivo actual.
+ *
+ * Si falla (por ejemplo, el token ya no existía), lo ignoramos
+ * porque el objetivo es limpiar la sesión local igualmente.
+ */
+export const cerrarSesionBackend = async (refreshToken: string) => {
+    await hacerPeticion("/auth/logout", {
+        metodo: "POST",
+        body: {
+            refresh_token: refreshToken
+        }
+    });
+};
+
+/*
  * Este método pide al backend los datos del usuario autenticado.
  *
  * Necesita:

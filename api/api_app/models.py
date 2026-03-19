@@ -386,3 +386,37 @@ class UserPointsTotal(Base):
     )
 
     user = relationship("User")
+
+
+# =========================================================
+# REFRESH TOKENS
+# =========================================================
+# Tokens de larga duración (30 días) para renovar el access token
+# sin obligar al usuario a hacer login de nuevo.
+#
+# Seguridad:
+# - Nunca se guarda el token en claro, solo su hash SHA-256.
+# - Cada uso genera un nuevo par (rotación de tokens).
+# - El campo revoked permite invalidar un token antes de que expire.
+# =========================================================
+
+class RefreshToken(Base):
+    __tablename__ = "refresh_tokens"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+
+    user_id = Column(
+        UUID(as_uuid=True),
+        ForeignKey("users.id", ondelete="CASCADE"),
+        nullable=False
+    )
+
+    # Solo se guarda el hash del token (SHA-256 de 64 hex chars)
+    token_hash = Column(String(64), nullable=False, unique=True)
+
+    expires_at = Column(DateTime(timezone=True), nullable=False)
+    revoked = Column(Boolean, nullable=False, server_default=text("false"))
+
+    created_at = Column(DateTime(timezone=True), nullable=False, server_default=func.now())
+
+    user = relationship("User")

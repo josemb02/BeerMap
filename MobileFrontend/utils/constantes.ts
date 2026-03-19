@@ -41,3 +41,9 @@ export const API_URL = "https://beermap-production.up.railway.app";
  */
 
 export const CLAVE_TOKEN = "beermap_token";
+
+/*
+ * Clave para guardar el refresh token en el dispositivo (AsyncStorage).
+ * Se guarda por separado del access token para mayor claridad.
+ */
+export const CLAVE_REFRESH_TOKEN = "beermap_refresh_token";

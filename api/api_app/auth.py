@@ -9,6 +9,8 @@
 # -------------------------------------------------------------------
 
 from datetime import datetime, timedelta, timezone
+import hashlib
+import secrets
 import uuid
 
 import bcrypt
@@ -20,7 +22,7 @@ from sqlalchemy.orm import Session
 
 from .config import settings
 from .database import get_db
-from .models import User
+from .models import User, RefreshToken
 
 
 # -------------------------------------------------------------------
@@ -186,6 +188,121 @@ def get_current_user(
         )
 
     return user
+
+
+# -------------------------------------------------------------------
+# REFRESH TOKENS
+# -------------------------------------------------------------------
+# Funciones para crear, verificar y revocar refresh tokens.
+#
+# Seguridad:
+# - OWASP (2025): A02 Cryptographic Failures.
+#   El token nunca se guarda en claro, solo su hash SHA-256.
+# - Se usa rotación de tokens: cada vez que se renueva el access token
+#   el refresh token anterior queda revocado y se genera uno nuevo.
+# -------------------------------------------------------------------
+
+def _hash_refresh_token(raw_token: str) -> str:
+    """
+    Devuelve el hash SHA-256 del token en formato hexadecimal (64 chars).
+    Se usa para guardar y comparar tokens sin almacenarlos en claro.
+    """
+    return hashlib.sha256(raw_token.encode("utf-8")).hexdigest()
+
+
+def create_refresh_token(user_id: uuid.UUID, db: Session) -> str:
+    """
+    Genera un refresh token seguro, lo hashea y lo guarda en BD.
+
+    Devuelve el token en claro para enviarlo al cliente.
+    El cliente debe guardarlo de forma segura (no en localStorage web).
+    """
+    # Token de 48 bytes en base64url = 64 caracteres, suficientemente aleatorio
+    raw_token = secrets.token_urlsafe(48)
+    token_hash = _hash_refresh_token(raw_token)
+
+    expires_at = datetime.now(timezone.utc) + timedelta(
+        days=settings.REFRESH_TOKEN_EXPIRE_DAYS
+    )
+
+    refresh = RefreshToken(
+        user_id=user_id,
+        token_hash=token_hash,
+        expires_at=expires_at,
+        revoked=False,
+    )
+
+    db.add(refresh)
+    db.commit()
+
+    return raw_token
+
+
+def verify_refresh_token(raw_token: str, db: Session):
+    """
+    Verifica un refresh token y devuelve (usuario, registro_refresh).
+
+    Comprueba:
+    - que el hash exista en BD
+    - que no esté revocado
+    - que no haya expirado
+    - que el usuario siga activo
+
+    Si cualquier comprobación falla -> 401.
+    Se devuelve la tupla para que el endpoint pueda revocar
+    el registro directamente sin hacer otra consulta.
+    """
+    token_hash = _hash_refresh_token(raw_token)
+
+    refresh = db.query(RefreshToken).filter(
+        RefreshToken.token_hash == token_hash
+    ).first()
+
+    if refresh is None:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Refresh token inválido"
+        )
+
+    if refresh.revoked:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Refresh token revocado"
+        )
+
+    if refresh.expires_at < datetime.now(timezone.utc):
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Refresh token expirado"
+        )
+
+    user = db.query(User).filter(User.id == refresh.user_id).first()
+
+    if user is None or user.is_active is False:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Usuario no encontrado o inactivo"
+        )
+
+    return user, refresh
+
+
+def revoke_refresh_token(raw_token: str, db: Session) -> None:
+    """
+    Revoca un refresh token marcándolo como usado.
+
+    Si el token no existe en BD no hace nada.
+    Esto es intencional para no dar pistas sobre si el token era válido.
+    """
+    token_hash = _hash_refresh_token(raw_token)
+
+    refresh = db.query(RefreshToken).filter(
+        RefreshToken.token_hash == token_hash
+    ).first()
+
+    if refresh is not None:
+        refresh.revoked = True
+        db.commit()
 
 
 def require_admin(current_user: User = Depends(get_current_user)) -> User:

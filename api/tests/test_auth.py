@@ -259,3 +259,133 @@ def test_auth_me(client):
     assert data["fecha_nacimiento"] == "1999-01-15"
     assert data["pais"] == "España"
     assert data["ciudad"] == "Sevilla"
+
+
+# =========================================================
+# TESTS DE REFRESH TOKENS
+# =========================================================
+
+def _registrar_y_hacer_login(client, unique: str) -> dict:
+    """
+    Helper: registra un usuario y hace login.
+    Devuelve la respuesta completa del login (access_token + refresh_token).
+    """
+    ip_falsa = generar_ip_falsa(unique)
+
+    client.post(
+        "/auth/register",
+        headers={"X-Forwarded-For": ip_falsa},
+        json={
+            "username": f"rt_{unique}",
+            "email": f"rt_{unique}@test.com",
+            "password": "12345678"
+        }
+    )
+
+    login = client.post(
+        "/auth/login",
+        headers={"X-Forwarded-For": ip_falsa},
+        json={
+            "email": f"rt_{unique}@test.com",
+            "password": "12345678"
+        }
+    )
+
+    return login.json()
+
+
+def test_login_devuelve_refresh_token(client):
+    """
+    Comprueba que el login devuelve access_token y refresh_token.
+    """
+    unique = uuid.uuid4().hex[:8]
+    data = _registrar_y_hacer_login(client, unique)
+
+    assert "access_token" in data
+    assert "refresh_token" in data
+    assert data["token_type"] == "bearer"
+    assert len(data["refresh_token"]) > 20
+
+
+def test_refresh_devuelve_nuevos_tokens(client):
+    """
+    Comprueba que /auth/refresh devuelve un nuevo access_token
+    y un nuevo refresh_token.
+    """
+    unique = uuid.uuid4().hex[:8]
+    login_data = _registrar_y_hacer_login(client, unique)
+
+    respuesta = client.post(
+        "/auth/refresh",
+        json={"refresh_token": login_data["refresh_token"]}
+    )
+
+    assert respuesta.status_code == 200, respuesta.text
+    data = respuesta.json()
+
+    assert "access_token" in data
+    assert "refresh_token" in data
+    # El nuevo refresh token debe ser distinto al original
+    assert data["refresh_token"] != login_data["refresh_token"]
+
+
+def test_refresh_token_rotacion(client):
+    """
+    Comprueba que el refresh token original queda revocado
+    después de usarlo (rotación de tokens).
+    """
+    unique = uuid.uuid4().hex[:8]
+    login_data = _registrar_y_hacer_login(client, unique)
+
+    token_original = login_data["refresh_token"]
+
+    # Primer uso: debe funcionar
+    primer_uso = client.post(
+        "/auth/refresh",
+        json={"refresh_token": token_original}
+    )
+    assert primer_uso.status_code == 200, primer_uso.text
+
+    # Segundo uso del mismo token: debe fallar porque fue revocado
+    segundo_uso = client.post(
+        "/auth/refresh",
+        json={"refresh_token": token_original}
+    )
+    assert segundo_uso.status_code == 401
+
+
+def test_logout_revoca_refresh_token(client):
+    """
+    Comprueba que /auth/logout revoca el refresh token.
+    Después del logout, el refresh token no debe poder usarse.
+    """
+    unique = uuid.uuid4().hex[:8]
+    login_data = _registrar_y_hacer_login(client, unique)
+
+    refresh_token = login_data["refresh_token"]
+
+    # Logout
+    logout_resp = client.post(
+        "/auth/logout",
+        json={"refresh_token": refresh_token}
+    )
+    assert logout_resp.status_code == 200
+
+    # Intentar usar el refresh token después del logout: debe fallar
+    refresh_resp = client.post(
+        "/auth/refresh",
+        json={"refresh_token": refresh_token}
+    )
+    assert refresh_resp.status_code == 401
+
+
+def test_refresh_token_invalido(client):
+    """
+    Comprueba que un refresh token inventado devuelve 401.
+    """
+    respuesta = client.post(
+        "/auth/refresh",
+        json={"refresh_token": "este_token_no_existe_en_la_base_de_datos"}
+    )
+
+    assert respuesta.status_code == 401

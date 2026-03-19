@@ -1,18 +1,33 @@
 import React, { createContext, useContext, useEffect, useState } from "react";
-import { guardarToken, obtenerToken, borrarToken } from "../utils/almacenamiento";
-import { loginUsuario, obtenerMiPerfil, registrarUsuario } from "../servicios/servicioAuth";
+import {
+    guardarToken,
+    obtenerToken,
+    borrarToken,
+    guardarRefreshToken,
+    obtenerRefreshToken,
+    borrarRefreshToken,
+} from "../utils/almacenamiento";
+import {
+    loginUsuario,
+    obtenerMiPerfil,
+    registrarUsuario,
+    refrescarToken,
+    cerrarSesionBackend,
+} from "../servicios/servicioAuth";
+import { configurarCallbacksAuth } from "../servicios/api";
 
 /*
  * Este archivo se encarga de gestionar la autenticación
  * global de toda la aplicación.
  *
  * Aquí centralizamos:
- * - token de sesión
+ * - token de sesión (access token + refresh token)
  * - usuario autenticado
  * - carga inicial de sesión
  * - login
  * - registro
- * - logout
+ * - logout (revoca el refresh token en el backend)
+ * - renovación automática de tokens al recibir un 401
  *
  * La idea es que las pantallas no tengan que gestionar
  * por su cuenta toda esta lógica.
@@ -67,12 +82,24 @@ function ProveedorAuth({ children }: { children: React.ReactNode }) {
     const [cargando, setCargando] = useState(true);
 
     useEffect(() => {
+        /*
+         * Registramos los callbacks antes de cargar la sesión.
+         * Así, si el access token guardado ha expirado,
+         * el interceptor de api.ts puede renovarlo automáticamente
+         * durante la carga inicial.
+         */
+        configurarCallbacksAuth(intentarRefrescar, cerrarSesion);
         cargarSesionInicial();
     }, []);
 
     /*
      * Este método intenta restaurar una sesión anterior
      * usando el token guardado en el dispositivo.
+     *
+     * Si el access token ha expirado, el interceptor de api.ts
+     * llama automáticamente a intentarRefrescar. Si tiene éxito,
+     * setToken ya habrá sido llamado con el nuevo token, así que
+     * leemos el token actualizado del almacenamiento al terminar.
      */
     async function cargarSesionInicial() {
         try {
@@ -85,10 +112,22 @@ function ProveedorAuth({ children }: { children: React.ReactNode }) {
 
             const perfil = await obtenerMiPerfil(tokenGuardado);
 
-            setToken(tokenGuardado);
+            /*
+             * El token puede haberse renovado durante la petición anterior
+             * si el access token estaba expirado y el interceptor lo refrescó.
+             * Leemos el valor actualizado del almacenamiento para no
+             * sobreescribir el estado con un token antiguo.
+             */
+            const tokenActual = await obtenerToken();
+            setToken(tokenActual);
             setUsuario(perfil);
         } catch (error) {
+            /*
+             * Si todo falla (access token inválido y refresh también),
+             * limpiamos la sesión para que el usuario vuelva al login.
+             */
             await borrarToken();
+            await borrarRefreshToken();
             setToken(null);
             setUsuario(null);
         } finally {
@@ -97,13 +136,54 @@ function ProveedorAuth({ children }: { children: React.ReactNode }) {
     }
 
     /*
+     * Este método intenta renovar el access token usando
+     * el refresh token guardado en el dispositivo.
+     *
+     * Lo usa el interceptor de api.ts cuando recibe un 401.
+     *
+     * Devuelve:
+     * - el nuevo access token si el refresco tiene éxito
+     * - null si el refresh token no existe o ya no es válido
+     */
+    async function intentarRefrescar(): Promise<string | null> {
+        try {
+            const refreshTokenGuardado = await obtenerRefreshToken();
+
+            if (!refreshTokenGuardado) {
+                return null;
+            }
+
+            const respuesta = await refrescarToken(refreshTokenGuardado);
+
+            const nuevoAccessToken = respuesta.access_token;
+            const nuevoRefreshToken = respuesta.refresh_token;
+
+            /*
+             * Guardamos los nuevos tokens y actualizamos el estado.
+             * El refresh token anterior ya fue revocado en el backend
+             * (rotación de tokens).
+             */
+            await guardarToken(nuevoAccessToken);
+            await guardarRefreshToken(nuevoRefreshToken);
+            setToken(nuevoAccessToken);
+
+            return nuevoAccessToken;
+        } catch {
+            return null;
+        }
+    }
+
+    /*
      * Este método hace login completo.
+     * Guarda access token y refresh token.
      */
     async function iniciarSesion(email: string, password: string) {
         const respuestaLogin = await loginUsuario(email, password);
         const nuevoToken = respuestaLogin.access_token;
+        const nuevoRefreshToken = respuestaLogin.refresh_token;
 
         await guardarToken(nuevoToken);
+        await guardarRefreshToken(nuevoRefreshToken);
 
         const perfil = await obtenerMiPerfil(nuevoToken);
 
@@ -136,12 +216,34 @@ function ProveedorAuth({ children }: { children: React.ReactNode }) {
     }
 
     /*
-     * Este método cierra la sesión local del usuario.
+     * Este método cierra la sesión del usuario.
+     *
+     * Qué hace:
+     * 1. Revoca el refresh token en el backend (POST /auth/logout)
+     * 2. Elimina ambos tokens del dispositivo
+     * 3. Limpia el estado local
+     *
+     * Si la llamada al backend falla (sin conexión, token ya revocado...),
+     * igual limpiamos la sesión local para no dejar al usuario bloqueado.
      */
     async function cerrarSesion() {
-        await borrarToken();
-        setToken(null);
-        setUsuario(null);
+        try {
+            const refreshTokenGuardado = await obtenerRefreshToken();
+
+            if (refreshTokenGuardado) {
+                await cerrarSesionBackend(refreshTokenGuardado);
+            }
+        } catch {
+            /*
+             * Silenciamos errores de red en el logout.
+             * Lo importante es limpiar la sesión local.
+             */
+        } finally {
+            await borrarToken();
+            await borrarRefreshToken();
+            setToken(null);
+            setUsuario(null);
+        }
     }
 
     /*

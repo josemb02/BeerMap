@@ -7,7 +7,7 @@ import { API_URL } from "../utils/constantes";
  * Se deja aquí para:
  * - no repetir fetch en todos los servicios
  * - centralizar headers comunes
- * - poder añadir mejoras globales más adelante
+ * - gestionar el refresco automático de tokens al recibir un 401
  * - mantener una arquitectura más limpia
  */
 
@@ -15,7 +15,53 @@ type OpcionesPeticion = {
     metodo?: "GET" | "POST" | "PUT" | "DELETE";
     token?: string | null;
     body?: any;
+    /*
+     * Flag interno para evitar bucles infinitos.
+     * Cuando hacerPeticion reintenta con un token renovado,
+     * marca el reintento con este flag para no volver a intentar
+     * el refresco si el nuevo token tampoco funciona.
+     */
+    _esReintento?: boolean;
 };
+
+// =========================================================
+// CALLBACKS DE AUTENTICACIÓN
+// =========================================================
+// El contexto de autenticación (ContextoAuth) configura estos
+// callbacks al montarse, de forma que hacerPeticion pueda
+// renovar el token o cerrar sesión sin depender del contexto.
+// =========================================================
+
+/*
+ * Callback que intenta renovar el access token usando el refresh token.
+ * Devuelve el nuevo access token si tiene éxito, o null si falla.
+ * Configurado por ProveedorAuth al montarse.
+ */
+let _callbackRefrescar: (() => Promise<string | null>) | null = null;
+
+/*
+ * Callback que cierra la sesión del usuario.
+ * Se llama cuando el refresco falla (refresh token expirado o revocado).
+ * Configurado por ProveedorAuth al montarse.
+ */
+let _callbackCerrarSesion: (() => Promise<void>) | null = null;
+
+/*
+ * Registra los callbacks de autenticación.
+ * Debe llamarse desde ProveedorAuth antes de que el usuario
+ * haga cualquier petición autenticada.
+ */
+export const configurarCallbacksAuth = (
+    onRefrescar: () => Promise<string | null>,
+    onCerrarSesion: () => Promise<void>
+) => {
+    _callbackRefrescar = onRefrescar;
+    _callbackCerrarSesion = onCerrarSesion;
+};
+
+// =========================================================
+// FUNCIÓN PRINCIPAL DE PETICIONES
+// =========================================================
 
 /*
  * Este método hace una petición genérica al backend.
@@ -32,12 +78,16 @@ type OpcionesPeticion = {
  * - añade token si existe
  * - convierte el body a JSON si hace falta
  * - intenta leer la respuesta del backend
- * - si hay error, lanza un Error con mensaje claro
+ * - si hay un 401 y tenemos token y no es un reintento:
+ *     intenta renovar el token con el refresh token
+ *     y reintenta la petición original con el nuevo token
+ * - si el refresco falla, cierra la sesión automáticamente
+ * - si hay otro error, lanza un Error con mensaje claro
  */
 export const hacerPeticion = async (
     ruta: string,
     opciones: OpcionesPeticion = {}
-) => {
+): Promise<any> => {
     const metodo = opciones.metodo || "GET";
     const token = opciones.token || null;
     const body = opciones.body;
@@ -79,6 +129,48 @@ export const hacerPeticion = async (
         datos = await respuesta.json();
     } catch (error) {
         datos = null;
+    }
+
+    /*
+     * Si la respuesta es 401 y la petición tenía token y no es
+     * un reintento, intentamos renovar el access token.
+     *
+     * Condiciones para intentar el refresco:
+     * - código HTTP 401 (no autorizado)
+     * - la petición incluía un token (evita intentar en login/register)
+     * - no es ya un reintento (evita bucle infinito)
+     * - los callbacks de auth están configurados
+     */
+    if (
+        respuesta.status === 401 &&
+        token &&
+        !opciones._esReintento &&
+        _callbackRefrescar
+    ) {
+        const nuevoToken = await _callbackRefrescar();
+
+        if (nuevoToken) {
+            /*
+             * Tenemos un nuevo token. Reintentamos la petición original
+             * con el nuevo access token. Marcamos _esReintento para no
+             * volver a intentar el refresco si falla otra vez.
+             */
+            return hacerPeticion(ruta, {
+                ...opciones,
+                token: nuevoToken,
+                _esReintento: true
+            });
+        }
+
+        /*
+         * El refresco falló (refresh token expirado o revocado).
+         * Cerramos sesión automáticamente para forzar nuevo login.
+         */
+        if (_callbackCerrarSesion) {
+            await _callbackCerrarSesion();
+        }
+
+        throw new Error("Sesión expirada. Por favor, inicia sesión de nuevo");
     }
 
     /*

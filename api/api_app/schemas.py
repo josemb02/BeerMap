@@ -51,10 +51,20 @@ class LoginRequest(BaseModel):
 
 class TokenResponse(BaseModel):
     """
-    Respuesta del endpoint de login.
+    Respuesta del endpoint de login y del endpoint de refresh.
+    Incluye access_token (corta duración) y refresh_token (larga duración).
     """
     access_token: str
+    refresh_token: str
     token_type: str = "bearer"
+
+
+class RefreshRequest(BaseModel):
+    """
+    Datos necesarios para renovar el access token
+    o para cerrar sesión revocando el refresh token.
+    """
+    refresh_token: str
 
 
 # =========================================================

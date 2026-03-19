@@ -41,11 +41,14 @@ from sqlalchemy.exc import SQLAlchemyError
 from .config import settings
 from .database import get_db
 from .models import User
-from .schemas import RegisterRequest, LoginRequest, TokenResponse
+from .schemas import RegisterRequest, LoginRequest, TokenResponse, RefreshRequest
 from .auth import (
     hash_password,
     verify_password,
     create_access_token,
+    create_refresh_token,
+    verify_refresh_token,
+    revoke_refresh_token,
     get_current_user,
     require_admin,
 )
@@ -345,11 +348,14 @@ def login(
             detail="Credenciales inválidas",
         )
 
-    # Si el login es correcto, generamos token JWT
+    # Si el login es correcto, generamos access token + refresh token
     token = create_access_token(
         subject=str(user.id),
         expires_minutes=settings.JWT_EXPIRE_MINUTES,
     )
+
+    # El refresh token se guarda hasheado en BD
+    refresh_token = create_refresh_token(user_id=user.id, db=db)
 
     write_audit_log(
         db=db,
@@ -358,7 +364,7 @@ def login(
         user_id=user.id
     )
 
-    return TokenResponse(access_token=token)
+    return TokenResponse(access_token=token, refresh_token=refresh_token)
 
 
 # -------------------------------------------------------------------
@@ -378,6 +384,90 @@ def auth_me(current_user: User = Depends(get_current_user)):
         "ciudad": current_user.ciudad,
         "role": current_user.role,
     }
+
+
+# -------------------------------------------------------------------
+# AUTH - REFRESH
+# -------------------------------------------------------------------
+@app.post("/auth/refresh", response_model=TokenResponse)
+def refresh_token(
+    payload: RefreshRequest,
+    request: Request,
+    db: Session = Depends(get_db)
+):
+    """
+    Renueva el access token usando un refresh token válido.
+
+    Qué hace:
+    - verifica que el refresh token existe, no está revocado y no ha expirado
+    - revoca el refresh token usado (rotación: un token solo sirve una vez)
+    - emite un nuevo access token y un nuevo refresh token
+    - registra la operación en audit log
+
+    Seguridad:
+    - OWASP A07: rotación de tokens reduce impacto de filtración
+    - OWASP A09: trazabilidad de cada renovación
+    """
+    # Verificamos el refresh token y obtenemos usuario + registro BD
+    user, refresh_record = verify_refresh_token(payload.refresh_token, db)
+
+    # Rotación: revocamos el token usado inmediatamente
+    refresh_record.revoked = True
+    db.commit()
+
+    # Generamos nuevos tokens
+    nuevo_access_token = create_access_token(
+        subject=str(user.id),
+        expires_minutes=settings.JWT_EXPIRE_MINUTES,
+    )
+    nuevo_refresh_token = create_refresh_token(user_id=user.id, db=db)
+
+    write_audit_log(
+        db=db,
+        action="auth_refresh_ok",
+        request=request,
+        user_id=user.id
+    )
+
+    return TokenResponse(
+        access_token=nuevo_access_token,
+        refresh_token=nuevo_refresh_token
+    )
+
+
+# -------------------------------------------------------------------
+# AUTH - LOGOUT
+# -------------------------------------------------------------------
+@app.post("/auth/logout")
+def logout(
+    payload: RefreshRequest,
+    request: Request,
+    db: Session = Depends(get_db)
+):
+    """
+    Cierra la sesión revocando el refresh token del cliente.
+
+    Qué hace:
+    - busca el refresh token en BD y lo marca como revocado
+    - si el token no existe, responde igualmente con éxito
+      (para no dar pistas sobre tokens válidos)
+    - registra la operación en audit log
+
+    Nota:
+    - El access token no se puede revocar (es stateless por diseño).
+      Seguirá siendo válido hasta que expire (JWT_EXPIRE_MINUTES).
+      Por eso se recomienda usar tiempos de expiración cortos.
+    """
+    revoke_refresh_token(raw_token=payload.refresh_token, db=db)
+
+    write_audit_log(
+        db=db,
+        action="auth_logout",
+        request=request,
+        user_id=None
+    )
+
+    return {"detail": "Sesión cerrada correctamente"}
 
 
 # -------------------------------------------------------------------
