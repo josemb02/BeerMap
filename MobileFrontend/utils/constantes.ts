@@ -1,30 +1,43 @@
-import { Platform } from "react-native";
-
 /*
- * Este archivo guarda las constantes globales de la app.
+ * =========================================================
+ * CONFIGURACIÓN GLOBAL DE LA APP
+ * =========================================================
  *
- * Se centralizan aquí para:
- * - no repetir valores en muchos archivos
- * - poder cambiar la configuración rápido
- * - dejar la app más limpia y mantenible
+ * Este archivo centraliza constantes importantes para:
+ * - evitar repetir valores en múltiples archivos
+ * - facilitar cambios rápidos (como URLs)
+ * - mantener el código limpio y mantenible
  */
 
 /*
- * URL base del backend.
+ * =========================================================
+ * URL DEL BACKEND (PRODUCCIÓN)
+ * =========================================================
  *
- * Detecta automáticamente la plataforma:
- * - En web (navegador) usa localhost
- * - En móvil físico usa la IP local de la red
+ * Ahora la app YA NO usa localhost ni IP local,
+ * porque el backend está desplegado en Railway.
+ *
+ * Esto permite que:
+ * - funcione desde móvil físico
+ * - funcione desde cualquier red
+ * - esté listo para producción real
+ *
+ * IMPORTANTE:
+ * Si en el futuro tienes entorno dev/prod,
+ * puedes cambiar esto dinámicamente con __DEV__.
  */
-const IP_LOCAL = "172.20.10.14";
 
-export const API_URL = Platform.OS === "web"
-    ? "http://localhost:8000"
-    : `http://${IP_LOCAL}:8000`;
+export const API_URL = "https://beermap-production.up.railway.app";
 
 /*
- * Clave usada para guardar el token de sesión.
+ * =========================================================
+ * CLAVE DE ALMACENAMIENTO DEL TOKEN
+ * =========================================================
  *
- * Se deja como constante para no repetir strings sueltos.
+ * Se usa para guardar el JWT en el dispositivo (AsyncStorage).
+ *
+ * Tenerlo como constante evita errores de escritura
+ * y facilita cambios si en el futuro lo renombras.
  */
+
 export const CLAVE_TOKEN = "beermap_token";
