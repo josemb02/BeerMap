@@ -1,50 +1,21 @@
 {
-  "expo": {
-    "name": "BeerMap",
-    "slug": "MobileFrontend",
-    "version": "1.0.0",
-    "orientation": "portrait",
-    "icon": "./assets/images/BeerMap_APP_logo.png",
-    "scheme": "beermap",
-    "userInterfaceStyle": "automatic",
-    "newArchEnabled": true,
-    "ios": {
-      "supportsTablet": true,
-      "bundleIdentifier": "com.josemb02.beermap"
-    },
-    "android": {
-      "edgeToEdgeEnabled": true,
-      "predictiveBackGestureEnabled": false,
-      "package": "com.josemb02.beermap"
-    },
-    "web": {
-      "output": "static",
-      "favicon": "./assets/images/BeerMap_APP_logo.png"
-    },
-    "plugins": [
-      "expo-router",
-      [
-        "expo-splash-screen",
-        {
-          "image": "./assets/images/BeerMap_APP_logo.png",
-          "imageWidth": 200,
-          "resizeMode": "contain",
-          "backgroundColor": "#ffffff",
-          "dark": {
-            "backgroundColor": "#000000"
-          }
-        }
-      ]
-    ],
-    "experiments": {
-      "typedRoutes": true,
-      "reactCompiler": true
-    },
-    "extra": {
-      "router": {},
-      "eas": {
-        "projectId": "53f42ea9-884f-470f-8f6b-e0a236a94777"
-      }
-    }
-  }
+  "name": "beermap",
+  "version": "1.0.0",
+  "main": "expo-router/entry",
+  "scripts": {
+    "start": "expo start",
+    "android": "expo run:android",
+    "ios": "expo run:ios",
+    "web": "expo start --web"
+  },
+  "dependencies": {
+    "expo": "~51.0.0",
+    "expo-router": "^3.5.0",
+    "react": "18.2.0",
+    "react-native": "0.74.0"
+  },
+  "devDependencies": {
+    "typescript": "~5.3.3"
+  },
+  "private": true
 }
