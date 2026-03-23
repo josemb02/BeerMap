@@ -56,6 +56,59 @@ router = APIRouter(
 )
 
 
+def _ranking_por_periodo(
+    db: Session,
+    dias: int,
+    pais: str | None = None,
+    ciudad: str | None = None,
+) -> list[RankingEntry]:
+    """
+    Función interna reutilizable para rankings de período.
+
+    Parámetros:
+    - dias: ventana de tiempo hacia atrás (7 para semana, 30 para mes)
+    - pais: si se indica, filtra solo usuarios de ese país
+    - ciudad: si se indica, filtra solo usuarios de esa ciudad
+
+    Qué hace:
+    - calcula la fecha de corte
+    - suma deltas de points_ledger con reason='checkin' dentro del período
+    - aplica filtros de país/ciudad si se indican
+    - devuelve top 100 ordenado por puntos
+    """
+    fecha_corte = datetime.now(timezone.utc) - timedelta(days=dias)
+    puntos_periodo = func.sum(PointsLedger.delta)
+
+    consulta = db.query(
+        User.id.label("user_id"),
+        User.username.label("username"),
+        func.coalesce(puntos_periodo, 0).label("points")
+    ).join(
+        PointsLedger,
+        PointsLedger.user_id == User.id
+    ).filter(
+        User.is_active == True,
+        PointsLedger.reason == "checkin",
+        PointsLedger.created_at >= fecha_corte
+    )
+
+    # Filtros opcionales de localización
+    if pais is not None:
+        consulta = consulta.filter(User.pais == pais)
+    if ciudad is not None:
+        consulta = consulta.filter(User.ciudad == ciudad)
+
+    filas = consulta.group_by(
+        User.id,
+        User.username
+    ).order_by(
+        puntos_periodo.desc(),
+        User.username.asc()
+    ).limit(100).all()
+
+    return construir_respuesta_ranking(filas)
+
+
 def construir_respuesta_ranking(filas) -> list[RankingEntry]:
     """
     Construye la respuesta final del ranking.
@@ -221,93 +274,72 @@ def obtener_ranking_semanal(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    """
-    Devuelve el ranking de puntos de los últimos 7 días.
-
-    Qué hace:
-    - calcula la fecha de corte: ahora menos 7 días
-    - suma los deltas de points_ledger con reason='checkin' en ese rango
-    - solo incluye usuarios activos
-    - ordena de mayor a menor
-    - limita a los 100 primeros
-    """
-    # Fecha de corte: hace exactamente 7 días en UTC
-    hace_7_dias = datetime.now(timezone.utc) - timedelta(days=7)
-
-    # Suma de puntos de check-ins en el período
-    puntos_periodo = func.sum(PointsLedger.delta)
-
-    filas = db.query(
-        User.id.label("user_id"),
-        User.username.label("username"),
-        func.coalesce(puntos_periodo, 0).label("points")
-    ).join(
-        # Inner join: solo usuarios que tienen entradas en el ledger
-        PointsLedger,
-        PointsLedger.user_id == User.id
-    ).filter(
-        User.is_active == True,
-        PointsLedger.reason == "checkin",          # solo puntos de check-in
-        PointsLedger.created_at >= hace_7_dias     # dentro del período
-    ).group_by(
-        User.id,
-        User.username
-    ).order_by(
-        puntos_periodo.desc(),
-        User.username.asc()
-    ).limit(100).all()
-
-    return construir_respuesta_ranking(filas)
+    """Ranking global de los últimos 7 días."""
+    return _ranking_por_periodo(db, dias=7)
 
 
 # -------------------------------------------------------------------
 # ENDPOINT: ranking global mensual
-# -------------------------------------------------------------------
-# Suma los puntos ganados por check-ins en los últimos 30 días.
-# Solo aparecen usuarios con al menos un check-in en ese período.
 # -------------------------------------------------------------------
 @router.get("/global/monthly", response_model=list[RankingEntry])
 def obtener_ranking_mensual(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    """
-    Devuelve el ranking de puntos de los últimos 30 días.
+    """Ranking global de los últimos 30 días."""
+    return _ranking_por_periodo(db, dias=30)
 
-    Qué hace:
-    - calcula la fecha de corte: ahora menos 30 días
-    - suma los deltas de points_ledger con reason='checkin' en ese rango
-    - solo incluye usuarios activos
-    - ordena de mayor a menor
-    - limita a los 100 primeros
-    """
-    # Fecha de corte: hace exactamente 30 días en UTC
-    hace_30_dias = datetime.now(timezone.utc) - timedelta(days=30)
 
-    # Suma de puntos de check-ins en el período
-    puntos_periodo = func.sum(PointsLedger.delta)
+# -------------------------------------------------------------------
+# ENDPOINT: ranking por país — semanal
+# -------------------------------------------------------------------
+@router.get("/country/{pais}/weekly", response_model=list[RankingEntry])
+def obtener_ranking_pais_semanal(
+    pais: str,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Ranking de un país en los últimos 7 días."""
+    return _ranking_por_periodo(db, dias=7, pais=pais.strip())
 
-    filas = db.query(
-        User.id.label("user_id"),
-        User.username.label("username"),
-        func.coalesce(puntos_periodo, 0).label("points")
-    ).join(
-        # Inner join: solo usuarios que tienen entradas en el ledger
-        PointsLedger,
-        PointsLedger.user_id == User.id
-    ).filter(
-        User.is_active == True,
-        PointsLedger.reason == "checkin",           # solo puntos de check-in
-        PointsLedger.created_at >= hace_30_dias     # dentro del período
-    ).group_by(
-        User.id,
-        User.username
-    ).order_by(
-        puntos_periodo.desc(),
-        User.username.asc()
-    ).limit(100).all()
 
-    return construir_respuesta_ranking(filas)
+# -------------------------------------------------------------------
+# ENDPOINT: ranking por país — mensual
+# -------------------------------------------------------------------
+@router.get("/country/{pais}/monthly", response_model=list[RankingEntry])
+def obtener_ranking_pais_mensual(
+    pais: str,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Ranking de un país en los últimos 30 días."""
+    return _ranking_por_periodo(db, dias=30, pais=pais.strip())
+
+
+# -------------------------------------------------------------------
+# ENDPOINT: ranking por ciudad — semanal
+# -------------------------------------------------------------------
+@router.get("/city/{ciudad}/weekly", response_model=list[RankingEntry])
+def obtener_ranking_ciudad_semanal(
+    ciudad: str,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Ranking de una ciudad en los últimos 7 días."""
+    return _ranking_por_periodo(db, dias=7, ciudad=ciudad.strip())
+
+
+# -------------------------------------------------------------------
+# ENDPOINT: ranking por ciudad — mensual
+# -------------------------------------------------------------------
+@router.get("/city/{ciudad}/monthly", response_model=list[RankingEntry])
+def obtener_ranking_ciudad_mensual(
+    ciudad: str,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Ranking de una ciudad en los últimos 30 días."""
+    return _ranking_por_periodo(db, dias=30, ciudad=ciudad.strip())
 
 
 # -------------------------------------------------------------------

@@ -10,9 +10,41 @@ services:
     env_file:
       - .env
 
+    # ------------------------------------------------------------------
+    # VOLUMEN DE DESARROLLO
+    # ------------------------------------------------------------------
+    # Montamos el código fuente del host directamente sobre /app/app.
+    # Así los cambios en los .py se reflejan sin reconstruir la imagen.
+    #
+    # :ro  → el contenedor SOLO puede leer el código, nunca modificarlo.
+    #        Consistente con read_only:true — mínimo privilegio.
+    # ------------------------------------------------------------------
+    volumes:
+      - ./api/api_app:/app/app:ro
+
+    # ------------------------------------------------------------------
+    # COMANDO CON HOT-RELOAD
+    # ------------------------------------------------------------------
+    # --reload          activa reinicio automático al detectar cambios
+    # --reload-dir      limita la vigilancia solo a /app/app (no escanea
+    #                   todo el sistema de ficheros, más eficiente y seguro)
+    # PYTHONDONTWRITEBYTECODE=1 ya está en el Dockerfile, así que uvicorn
+    # no intentará escribir .pyc en el filesystem de solo lectura.
+    # ------------------------------------------------------------------
+    command: >
+      uvicorn app.main:app
+      --host 0.0.0.0
+      --port 8000
+      --reload
+      --reload-dir /app/app
+
     # =========================
     # HARDENING (SEGURIDAD)
     # =========================
+    # Se mantiene todo intacto:
+    # - read_only:true  → filesystem inmutable salvo /tmp
+    # - no-new-privileges → el proceso no puede escalar privilegios
+    # - cap_drop ALL    → sin capacidades de root
     read_only: true
     tmpfs:
       - /tmp

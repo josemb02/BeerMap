@@ -4,13 +4,11 @@ import {
     FlatList,
     Pressable,
     SafeAreaView,
-    ScrollView,
     StyleSheet,
     Text,
     View,
 } from "react-native";
 import { useFocusEffect } from "expo-router";
-import { Ionicons } from "@expo/vector-icons";
 import { usarAuth } from "../../contexto/ContextoAuth";
 import { hacerPeticion } from "../../servicios/api";
 import { AvatarCirculo } from "../../componentes/AvatarCirculo";
@@ -21,76 +19,78 @@ type EntradaRanking = {
     points: number;
 };
 
-type Grupo = {
-    id: string;
-    name: string;
-    join_code: string;
-};
+// Ámbito: colectivo del ranking
+type Ambito = "global" | "pais" | "ciudad";
 
-// "semana" y "mes" son los rankings de período (últimos 7 y 30 días)
-type TabRanking = "global" | "semana" | "mes" | "pais" | "ciudad" | "grupo";
+// Período: ventana de tiempo
+type Periodo = "historico" | "semana" | "mes";
 
 // ─────────────────────────────────────────────────────────────────────────────
 
 export default function Ranking() {
     const { token, usuario } = usarAuth();
 
-    const [tab, setTab] = useState<TabRanking>("global");
+    const [ambito,  setAmbito]  = useState<Ambito>("global");
+    const [periodo, setPeriodo] = useState<Periodo>("historico");
     const [ranking, setRanking] = useState<EntradaRanking[]>([]);
-    const [grupos, setGrupos] = useState<Grupo[]>([]);
-    const [grupoActivo, setGrupoActivo] = useState<Grupo | null>(null);
     const [cargando, setCargando] = useState(true);
 
     useFocusEffect(
         useCallback(() => {
-            cargarGrupos();
-            cargarRanking("global", null);
+            cargarRanking("global", "historico");
         }, [token])
     );
 
-    async function cargarGrupos() {
-        if (!token) return;
-        try {
-            const datos = await hacerPeticion("/groups/my", { metodo: "GET", token });
-            setGrupos(datos);
-        } catch { setGrupos([]); }
+    /*
+     * Construye la URL del endpoint combinando ámbito y período.
+     * Todas las combinaciones tienen endpoint propio en el backend.
+     */
+    function calcularRuta(a: Ambito, p: Periodo): string {
+        const sufijo = p === "semana" ? "/weekly" : p === "mes" ? "/monthly" : "";
+
+        if (a === "pais" && usuario?.pais) {
+            return `/rankings/country/${encodeURIComponent(usuario.pais)}${sufijo}`;
+        }
+        if (a === "ciudad" && usuario?.ciudad) {
+            return `/rankings/city/${encodeURIComponent(usuario.ciudad)}${sufijo}`;
+        }
+        return `/rankings/global${sufijo}`;
     }
 
-    async function cargarRanking(tipo: TabRanking, grupo: Grupo | null) {
+    async function cargarRanking(a: Ambito, p: Periodo) {
         if (!token) return;
         try {
             setCargando(true);
-
-            // Seleccionamos la ruta según el tab activo
-            let ruta = "/rankings/global";
-            if (tipo === "semana") {
-                ruta = "/rankings/global/weekly";
-            } else if (tipo === "mes") {
-                ruta = "/rankings/global/monthly";
-            } else if (tipo === "grupo" && grupo) {
-                ruta = `/rankings/group/${grupo.id}`;
-            } else if (tipo === "pais" && usuario?.pais) {
-                ruta = `/rankings/country/${encodeURIComponent(usuario.pais)}`;
-            } else if (tipo === "ciudad" && usuario?.ciudad) {
-                ruta = `/rankings/city/${encodeURIComponent(usuario.ciudad)}`;
-            }
-
-            const datos = await hacerPeticion(ruta, { metodo: "GET", token });
+            const datos = await hacerPeticion(calcularRuta(a, p), { metodo: "GET", token });
             setRanking(datos);
         } catch (e: any) {
-            // Logueamos el error para poder depurar desde la consola de Expo
-            console.error("[Ranking] Error cargando datos:", e?.message ?? e);
+            console.error("[Ranking] Error:", e?.message ?? e);
             setRanking([]);
-        } finally { setCargando(false); }
+        } finally {
+            setCargando(false);
+        }
     }
 
-    function cambiarTab(nuevoTab: TabRanking, grupo?: Grupo) {
-        setTab(nuevoTab);
-        if (nuevoTab === "grupo" && grupo) setGrupoActivo(grupo);
-        cargarRanking(nuevoTab, grupo || grupoActivo);
+    function cambiarAmbito(a: Ambito) {
+        setAmbito(a);
+        cargarRanking(a, periodo);
+    }
+
+    function cambiarPeriodo(p: Periodo) {
+        setPeriodo(p);
+        cargarRanking(ambito, p);
     }
 
     const miPosicion = ranking.findIndex(r => r.user_id === usuario?.id);
+    // "Fuera del top 100" solo cuando el período no es histórico y hay datos pero el usuario no aparece
+    const fueraDelTop = miPosicion < 0 && ranking.length > 0 && periodo !== "historico";
+
+    // Tabs de ámbito: siempre Global, más País y Ciudad si el usuario los tiene
+    const tabsAmbito: { key: Ambito; label: string }[] = [
+        { key: "global", label: "Global" },
+        ...(usuario?.pais   ? [{ key: "pais"   as Ambito, label: usuario.pais }]   : []),
+        ...(usuario?.ciudad ? [{ key: "ciudad" as Ambito, label: usuario.ciudad }] : []),
+    ];
 
     return (
         <SafeAreaView style={s.root}>
@@ -99,47 +99,37 @@ export default function Ranking() {
             <View style={s.header}>
                 <Text style={s.headerTitulo}>Ranking</Text>
                 {miPosicion >= 0 ? (
-                    // El usuario está en el top → mostramos su posición
                     <View style={s.miPosicionBadge}>
                         <Text style={s.miPosicionTexto}>#{miPosicion + 1}</Text>
                     </View>
-                ) : (tab === "semana" || tab === "mes") && ranking.length > 0 ? (
-                    // En tabs de período, si hay datos pero el usuario no aparece,
-                    // es que no tiene check-ins en ese intervalo → fuera del top
+                ) : fueraDelTop ? (
                     <View style={s.fueraBadge}>
                         <Text style={s.fueraBadgeTexto}>Fuera del top 100</Text>
                     </View>
                 ) : null}
             </View>
 
-            {/* Tabs de navegación */}
-            <ScrollView
-                horizontal
-                showsHorizontalScrollIndicator={false}
-                contentContainerStyle={s.tabsScroll}
-                style={s.tabsWrapper}
-            >
-                <TabBtn label="Global"       activo={tab === "global"} onPress={() => cambiarTab("global")} />
-                <TabBtn label="Esta semana"  activo={tab === "semana"} onPress={() => cambiarTab("semana")}
-                    icono="calendar-outline" />
-                <TabBtn label="Este mes"     activo={tab === "mes"}    onPress={() => cambiarTab("mes")}
-                    icono="stats-chart-outline" />
-                {usuario?.pais && (
-                    <TabBtn label={usuario.pais} activo={tab === "pais"} onPress={() => cambiarTab("pais")} />
-                )}
-                {usuario?.ciudad && (
-                    <TabBtn label={usuario.ciudad} activo={tab === "ciudad"} onPress={() => cambiarTab("ciudad")} />
-                )}
-                {grupos.map(g => (
-                    <TabBtn
-                        key={g.id}
-                        label={g.name}
-                        activo={tab === "grupo" && grupoActivo?.id === g.id}
-                        onPress={() => cambiarTab("grupo", g)}
-                        icono="people-outline"
-                    />
+            {/* Fila 1 — Ámbito centrado */}
+            <View style={s.ambitoFila}>
+                {tabsAmbito.map(({ key, label }) => (
+                    <Pressable
+                        key={key}
+                        style={[s.ambitoTab, ambito === key && s.ambitoTabActivo]}
+                        onPress={() => cambiarAmbito(key)}
+                    >
+                        <Text style={[s.ambitoLabel, ambito === key && s.ambitoLabelActivo]}>
+                            {label}
+                        </Text>
+                    </Pressable>
                 ))}
-            </ScrollView>
+            </View>
+
+            {/* Fila 2 — Período (segmentado, siempre visible) */}
+            <View style={s.periodoContenedor}>
+                <PeriodoBtn label="Histórico"   activo={periodo === "historico"} onPress={() => cambiarPeriodo("historico")} />
+                <PeriodoBtn label="Esta semana" activo={periodo === "semana"}    onPress={() => cambiarPeriodo("semana")} />
+                <PeriodoBtn label="Este mes"    activo={periodo === "mes"}       onPress={() => cambiarPeriodo("mes")} />
+            </View>
 
             {/* Podio top 3 */}
             {!cargando && ranking.length >= 3 && (
@@ -157,8 +147,6 @@ export default function Ranking() {
                     <Text style={s.emptyTexto}>Registra cervezas para aparecer aquí</Text>
                 </View>
             ) : (
-                // Si hay ≥3 usuarios, el Podio pinta los 3 primeros y la lista arranca en el 4º.
-                // Si hay <3 usuarios, no hay Podio y la lista muestra a todos desde la posición 1.
                 <FlatList
                     data={ranking.length >= 3 ? ranking.slice(3) : ranking}
                     keyExtractor={item => item.user_id}
@@ -228,7 +216,6 @@ function FilaRanking({ entrada, posicion, esMio, avatarUri }: {
     return (
         <View style={[s.fila, esMio && s.filaMia]}>
             <Text style={s.filaPosicion}>{String(posicion).padStart(2, "0")}</Text>
-            {/* marginRight separa el avatar del nombre de usuario */}
             <AvatarCirculo
                 uri={esMio ? avatarUri : null}
                 username={entrada.username}
@@ -247,28 +234,14 @@ function FilaRanking({ entrada, posicion, esMio, avatarUri }: {
     );
 }
 
-// ─── Tab button ───────────────────────────────────────────────────────────────
+// ─── Botón período (segmentado) ───────────────────────────────────────────────
 
-function TabBtn({ label, activo, onPress, icono }: {
-    label: string;
-    activo: boolean;
-    onPress: () => void;
-    icono?: string;
+function PeriodoBtn({ label, activo, onPress }: {
+    label: string; activo: boolean; onPress: () => void;
 }) {
     return (
-        <Pressable
-            style={[s.tab, activo && s.tabActivo]}
-            onPress={onPress}
-        >
-            {icono && (
-                <Ionicons
-                    name={icono as any}
-                    size={12}
-                    color={activo ? "#FFFFFF" : "#6B85A8"}
-                    style={{ marginRight: 4 }}
-                />
-            )}
-            <Text style={[s.tabLabel, activo && s.tabLabelActivo]}>{label}</Text>
+        <Pressable style={[s.periodoTab, activo && s.periodoTabActivo]} onPress={onPress}>
+            <Text style={[s.periodoLabel, activo && s.periodoLabelActivo]}>{label}</Text>
         </Pressable>
     );
 }
@@ -278,13 +251,14 @@ function TabBtn({ label, activo, onPress, icono }: {
 const s = StyleSheet.create({
     root: { flex: 1, backgroundColor: "#F7F4EC" },
 
+    // Cabecera
     header: {
         flexDirection: "row",
         justifyContent: "space-between",
         alignItems: "center",
         paddingHorizontal: 24,
         paddingTop: 20,
-        paddingBottom: 16,
+        paddingBottom: 14,
     },
     headerTitulo: { fontSize: 22, fontWeight: "700", color: "#10233E", letterSpacing: -0.5 },
     miPosicionBadge: {
@@ -294,7 +268,6 @@ const s = StyleSheet.create({
         paddingVertical: 5,
     },
     miPosicionTexto: { fontSize: 13, fontWeight: "700", color: "#F7C948" },
-    // Badge secundario cuando el usuario no está en el top del período
     fueraBadge: {
         backgroundColor: "#F0EDE6",
         borderRadius: 20,
@@ -303,21 +276,52 @@ const s = StyleSheet.create({
     },
     fueraBadgeTexto: { fontSize: 11, fontWeight: "600", color: "#9AAABB" },
 
-    tabsWrapper: { maxHeight: 44, marginBottom: 16 },
-    tabsScroll: { paddingHorizontal: 24, gap: 8 },
-    tab: {
+    // Fila ámbito — centrada horizontalmente
+    ambitoFila: {
         flexDirection: "row",
+        justifyContent: "center",
         alignItems: "center",
-        paddingHorizontal: 14,
+        gap: 8,
+        paddingHorizontal: 24,
+        marginBottom: 10,
+    },
+    ambitoTab: {
+        paddingHorizontal: 20,
         paddingVertical: 8,
         borderRadius: 20,
         borderWidth: 1,
         borderColor: "#E2E8F0",
         backgroundColor: "#FFFFFF",
     },
-    tabActivo: { backgroundColor: "#10233E", borderColor: "#10233E" },
-    tabLabel: { fontSize: 13, fontWeight: "600", color: "#6B85A8" },
-    tabLabelActivo: { color: "#FFFFFF" },
+    ambitoTabActivo: { backgroundColor: "#10233E", borderColor: "#10233E" },
+    ambitoLabel: { fontSize: 13, fontWeight: "600", color: "#6B85A8" },
+    ambitoLabelActivo: { color: "#FFFFFF" },
+
+    // Control segmentado de período
+    periodoContenedor: {
+        flexDirection: "row",
+        marginHorizontal: 24,
+        marginBottom: 16,
+        backgroundColor: "#EEEBE3",
+        borderRadius: 12,
+        padding: 3,
+    },
+    periodoTab: {
+        flex: 1,
+        paddingVertical: 7,
+        borderRadius: 10,
+        alignItems: "center",
+    },
+    periodoTabActivo: {
+        backgroundColor: "#FFFFFF",
+        shadowColor: "#000",
+        shadowOffset: { width: 0, height: 1 },
+        shadowOpacity: 0.08,
+        shadowRadius: 3,
+        elevation: 2,
+    },
+    periodoLabel: { fontSize: 12, fontWeight: "600", color: "#9AAABB" },
+    periodoLabelActivo: { color: "#10233E" },
 
     // Podio
     podio: {
@@ -330,17 +334,6 @@ const s = StyleSheet.create({
     },
     podioColumna: { flex: 1, alignItems: "center" },
     podioMedalla: { fontSize: 20, marginBottom: 4 },
-    podioAvatar: {
-        width: 44,
-        height: 44,
-        borderRadius: 22,
-        backgroundColor: "#E2E8F0",
-        justifyContent: "center",
-        alignItems: "center",
-        marginBottom: 6,
-    },
-    podioAvatarMio: { backgroundColor: "#10233E" },
-    podioAvatarTexto: { fontSize: 18, fontWeight: "700", color: "#10233E" },
     podioNombre: { fontSize: 12, fontWeight: "600", color: "#10233E", marginBottom: 2, maxWidth: 80 },
     podioPuntos: { fontSize: 11, color: "#6B85A8", marginBottom: 6 },
     podioBase: {
@@ -377,18 +370,6 @@ const s = StyleSheet.create({
         borderRadius: 10,
     },
     filaPosicion: { fontSize: 12, fontWeight: "600", color: "#B0BAC8", width: 28 },
-    filaAvatar: {
-        width: 36,
-        height: 36,
-        borderRadius: 18,
-        backgroundColor: "#E2E8F0",
-        justifyContent: "center",
-        alignItems: "center",
-        marginRight: 12,
-    },
-    filaAvatarMio: { backgroundColor: "#10233E" },
-    filaAvatarTexto: { fontSize: 14, fontWeight: "700", color: "#10233E" },
-    filaAvatarTextoMio: { color: "#FFFFFF" },
     filaUsername: { flex: 1, fontSize: 15, fontWeight: "600", color: "#10233E" },
     filaUsernameMio: { color: "#10233E" },
     filaPuntos: { fontSize: 15, fontWeight: "700", color: "#10233E" },
