@@ -15,7 +15,6 @@ import { usarAuth } from "../../contexto/ContextoAuth";
 import {
     obtenerCatalogo,
     comprarIcono,
-    cambiarIconoActivo,
 } from "../../servicios/servicioIconos";
 import { obtenerMisStats } from "../../servicios/servicioAuth";
 
@@ -95,25 +94,6 @@ export default function Tienda() {
         );
     }
 
-    /*
-     * Activa un icono que ya posee el usuario.
-     */
-    async function handleActivar(icono: IconoCatalogo) {
-        if (!token) return;
-        try {
-            setAccionando(icono.id);
-            await cambiarIconoActivo(token, icono.id);
-            // Actualizamos el estado local sin recargar todo
-            setIconos(prev =>
-                prev.map(ic => ({ ...ic, activo: ic.id === icono.id }))
-            );
-        } catch (err: any) {
-            Alert.alert("Error", err?.message || "No se pudo activar el icono.");
-        } finally {
-            setAccionando(null);
-        }
-    }
-
     return (
         <SafeAreaView style={s.root}>
             {/* Cabecera */}
@@ -143,7 +123,6 @@ export default function Tienda() {
                             puntos={puntos}
                             accionando={accionando === item.id}
                             onComprar={() => handleComprar(item)}
-                            onActivar={() => handleActivar(item)}
                         />
                     )}
                 />
@@ -159,24 +138,18 @@ function FilaIcono({
     puntos,
     accionando,
     onComprar,
-    onActivar,
 }: {
     icono: IconoCatalogo;
     puntos: number;
     accionando: boolean;
     onComprar: () => void;
-    onActivar: () => void;
 }) {
     /*
      * Estado del botón de acción:
-     * - activo       → "Activo ✓" dorado (ya seleccionado)
-     * - poseido      → "Usar"     (disponible, no activo)
-     * - puede pagar  → "Comprar X pts"
-     * - no puede     → "X pts" deshabilitado
+     * - poseido       → "Tienes este" (informativo, sin acción — el icono se elige en cada check-in)
+     * - puede pagar   → "Comprar X pts"
+     * - no puede      → "X pts" deshabilitado
      */
-    const puedeComprar = !icono.poseido && puntos >= icono.coste_puntos;
-    const noPuede     = !icono.poseido && puntos < icono.coste_puntos;
-
     let boton;
 
     if (accionando) {
@@ -185,22 +158,15 @@ function FilaIcono({
                 <ActivityIndicator size="small" color="#FFFFFF" />
             </View>
         );
-    } else if (icono.activo) {
+    } else if (icono.poseido) {
+        // Ya lo tiene — informativo, sin acción. El icono se elige en cada check-in.
         boton = (
-            <View style={[s.btn, s.btnActivo]}>
-                <Text style={s.btnTextoActivo}>Activo ✓</Text>
+            <View style={[s.btn, s.btnTienes]}>
+                <Text style={s.btnTextoTienes}>Tienes este</Text>
             </View>
         );
-    } else if (icono.poseido) {
-        boton = (
-            <Pressable
-                style={({ pressed }) => [s.btn, s.btnUsar, pressed && s.btnPress]}
-                onPress={onActivar}
-            >
-                <Text style={s.btnTextoUsar}>Usar</Text>
-            </Pressable>
-        );
-    } else if (puedeComprar) {
+    } else if (puntos >= icono.coste_puntos) {
+        // Puede comprarlo
         boton = (
             <Pressable
                 style={({ pressed }) => [s.btn, s.btnComprar, pressed && s.btnPress]}
@@ -210,7 +176,7 @@ function FilaIcono({
             </Pressable>
         );
     } else {
-        // noPuede
+        // No tiene puntos suficientes
         boton = (
             <View style={[s.btn, s.btnDeshabilitado]}>
                 <Text style={s.btnTextoDeshabilitado}>{icono.coste_puntos} pts</Text>
@@ -295,11 +261,9 @@ const s = StyleSheet.create({
     },
     btnPress: { opacity: 0.75 },
 
-    btnActivo: { backgroundColor: "#F7C948" },
-    btnTextoActivo: { fontSize: 12, fontWeight: "700", color: "#10233E" },
-
-    btnUsar: { backgroundColor: "#10233E" },
-    btnTextoUsar: { fontSize: 12, fontWeight: "700", color: "#FFFFFF" },
+    // "Tienes este" — badge verde suave, sin acción
+    btnTienes: { backgroundColor: "#EDF7F1", borderWidth: 1, borderColor: "#68D391" },
+    btnTextoTienes: { fontSize: 11, fontWeight: "600", color: "#276749" },
 
     btnComprar: { backgroundColor: "#10233E" },
     btnTextoComprar: { fontSize: 12, fontWeight: "700", color: "#FFFFFF" },

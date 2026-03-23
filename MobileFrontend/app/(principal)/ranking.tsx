@@ -71,8 +71,11 @@ export default function Ranking() {
 
             const datos = await hacerPeticion(ruta, { metodo: "GET", token });
             setRanking(datos);
-        } catch { setRanking([]); }
-        finally { setCargando(false); }
+        } catch (e: any) {
+            // Logueamos el error para poder depurar desde la consola de Expo
+            console.error("[Ranking] Error cargando datos:", e?.message ?? e);
+            setRanking([]);
+        } finally { setCargando(false); }
     }
 
     function cambiarTab(nuevoTab: TabRanking, grupo?: Grupo) {
@@ -137,15 +140,17 @@ export default function Ranking() {
                     <Text style={s.emptyTexto}>Registra cervezas para aparecer aquí</Text>
                 </View>
             ) : (
+                // Si hay ≥3 usuarios, el Podio pinta los 3 primeros y la lista arranca en el 4º.
+                // Si hay <3 usuarios, no hay Podio y la lista muestra a todos desde la posición 1.
                 <FlatList
-                    data={ranking.slice(3)}
+                    data={ranking.length >= 3 ? ranking.slice(3) : ranking}
                     keyExtractor={item => item.user_id}
                     contentContainerStyle={s.lista}
                     showsVerticalScrollIndicator={false}
                     renderItem={({ item, index }) => (
                         <FilaRanking
                             entrada={item}
-                            posicion={index + 4}
+                            posicion={index + (ranking.length >= 3 ? 4 : 1)}
                             esMio={item.user_id === usuario?.id}
                             avatarUri={usuario?.avatar_url}
                         />
@@ -206,12 +211,14 @@ function FilaRanking({ entrada, posicion, esMio, avatarUri }: {
     return (
         <View style={[s.fila, esMio && s.filaMia]}>
             <Text style={s.filaPosicion}>{String(posicion).padStart(2, "0")}</Text>
+            {/* marginRight separa el avatar del nombre de usuario */}
             <AvatarCirculo
                 uri={esMio ? avatarUri : null}
                 username={entrada.username}
                 size={36}
                 colorFondo={esMio ? "#10233E" : "#E2E8F0"}
                 colorTexto={esMio ? "#FFFFFF" : "#10233E"}
+                style={{ marginRight: 12 }}
             />
             <Text style={[s.filaUsername, esMio && s.filaUsernameMio]} numberOfLines={1}>
                 {entrada.username}

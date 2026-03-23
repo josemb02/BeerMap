@@ -271,12 +271,14 @@ function DetalleGrupo({ grupo, token, onVolver }: {
                                 return (
                                     <View style={[s.rankFila, esMio && s.rankFilaMia]}>
                                         <Text style={s.rankPos}>{String(index + 1).padStart(2, "0")}</Text>
+                                        {/* marginRight separa el avatar del nombre */}
                                         <AvatarCirculo
                                             uri={esMio ? usuario?.avatar_url : null}
                                             username={item.username}
                                             size={36}
                                             colorFondo={esMio ? "#10233E" : "#E2E8F0"}
                                             colorTexto={esMio ? "#FFFFFF" : "#10233E"}
+                                            style={{ marginRight: 12 }}
                                         />
                                         <Text style={s.rankNombre} numberOfLines={1}>{item.username}</Text>
                                         <Text style={s.rankPuntos}>{item.points} <Text style={s.rankPtsSuf}>pts</Text></Text>
@@ -298,12 +300,14 @@ function DetalleGrupo({ grupo, token, onVolver }: {
                                 const esMio = item.id === usuario?.id;
                                 return (
                                     <View style={s.miembroFila}>
+                                        {/* marginRight separa el avatar del nombre */}
                                         <AvatarCirculo
                                             uri={esMio ? usuario?.avatar_url : null}
                                             username={item.username}
                                             size={40}
                                             colorFondo={esMio ? "#10233E" : "#F0EDE6"}
                                             colorTexto={esMio ? "#FFFFFF" : "#10233E"}
+                                            style={{ marginRight: 14 }}
                                         />
                                         <Text style={s.miembroNombre}>{item.username}</Text>
                                     </View>

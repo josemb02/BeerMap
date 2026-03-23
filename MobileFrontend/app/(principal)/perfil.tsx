@@ -35,16 +35,23 @@ async function subirACloudinary(uri: string): Promise<string> {
     formData.append("file", { uri, type: tipo, name: `avatar.${extension}` } as any);
     formData.append("upload_preset", UPLOAD_PRESET);
 
+    // Log para verificar qué se está enviando a Cloudinary
+    console.log("[Cloudinary] Subiendo imagen:", { cloud: CLOUD_NAME, preset: UPLOAD_PRESET, extension, tipo });
+
     const respuesta = await fetch(
         `https://api.cloudinary.com/v1_1/${CLOUD_NAME}/image/upload`,
         { method: "POST", body: formData }
     );
 
+    // Si Cloudinary rechaza la petición, logueamos el cuerpo completo del error
     if (!respuesta.ok) {
-        throw new Error("No se pudo subir la imagen. Inténtalo de nuevo.");
+        const textoError = await respuesta.text().catch(() => "(sin cuerpo)");
+        console.error("[Cloudinary] Error HTTP", respuesta.status, textoError);
+        throw new Error(`No se pudo subir la imagen (${respuesta.status}). Revisa la consola para más detalles.`);
     }
 
     const datos = await respuesta.json();
+    console.log("[Cloudinary] Subida exitosa:", datos.secure_url);
     return datos.secure_url as string;
 }
 
@@ -100,7 +107,7 @@ export default function Perfil() {
         }
 
         const resultado = await ImagePicker.launchImageLibraryAsync({
-            mediaTypes: ImagePicker.MediaTypeOptions.Images,
+            mediaTypes: "images", // MediaTypeOptions fue eliminado en expo-image-picker v16+
             allowsEditing: true,
             aspect: [1, 1],
             quality: 0.8,

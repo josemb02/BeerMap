@@ -1,5 +1,5 @@
 import { Image } from "expo-image";
-import { StyleSheet, Text, View } from "react-native";
+import { StyleSheet, Text, View, ViewStyle } from "react-native";
 
 /*
  * Componente reutilizable de avatar circular.
@@ -13,6 +13,7 @@ import { StyleSheet, Text, View } from "react-native";
  * - size: tamaño en px del círculo (por defecto 36).
  * - colorFondo: color del círculo cuando no hay foto (por defecto gris claro).
  * - colorTexto: color de la inicial (por defecto azul oscuro).
+ * - style: estilos adicionales aplicados al contenedor (p.ej. marginRight).
  */
 type Props = {
     uri?: string | null;
@@ -20,6 +21,7 @@ type Props = {
     size?: number;
     colorFondo?: string;
     colorTexto?: string;
+    style?: ViewStyle;
 };
 
 export function AvatarCirculo({
@@ -28,6 +30,7 @@ export function AvatarCirculo({
     size = 36,
     colorFondo = "#E2E8F0",
     colorTexto = "#10233E",
+    style,
 }: Props) {
     const radio = size / 2;
     const tamanoLetra = Math.round(size * 0.4);
@@ -37,7 +40,7 @@ export function AvatarCirculo({
         return (
             <Image
                 source={{ uri }}
-                style={[s.imagen, { width: size, height: size, borderRadius: radio }]}
+                style={[s.imagen, { width: size, height: size, borderRadius: radio }, style]}
                 contentFit="cover"
             />
         );
@@ -48,6 +51,7 @@ export function AvatarCirculo({
             style={[
                 s.circulo,
                 { width: size, height: size, borderRadius: radio, backgroundColor: colorFondo },
+                style,
             ]}
         >
             <Text style={[s.letra, { fontSize: tamanoLetra, color: colorTexto }]}>
