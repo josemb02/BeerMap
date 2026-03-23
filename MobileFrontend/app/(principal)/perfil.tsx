@@ -21,7 +21,7 @@ import { AvatarCirculo } from "../../componentes/AvatarCirculo";
  * El preset "mapa_cervecería_avatares" permite subida directa sin API key.
  */
 const CLOUD_NAME = "dxfvlrxaw";
-const UPLOAD_PRESET = "mapa_cervecería_avatares";
+const UPLOAD_PRESET = "beermap_avatars";
 
 /*
  * Sube una imagen local directamente a Cloudinary usando el preset sin firma.
