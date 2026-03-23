@@ -27,7 +27,8 @@ type Grupo = {
     join_code: string;
 };
 
-type TabRanking = "global" | "grupo" | "pais" | "ciudad";
+// "semana" y "mes" son los rankings de período (últimos 7 y 30 días)
+type TabRanking = "global" | "semana" | "mes" | "pais" | "ciudad" | "grupo";
 
 // ─────────────────────────────────────────────────────────────────────────────
 
@@ -59,9 +60,14 @@ export default function Ranking() {
         if (!token) return;
         try {
             setCargando(true);
-            let ruta = "/rankings/global";
 
-            if (tipo === "grupo" && grupo) {
+            // Seleccionamos la ruta según el tab activo
+            let ruta = "/rankings/global";
+            if (tipo === "semana") {
+                ruta = "/rankings/global/weekly";
+            } else if (tipo === "mes") {
+                ruta = "/rankings/global/monthly";
+            } else if (tipo === "grupo" && grupo) {
                 ruta = `/rankings/group/${grupo.id}`;
             } else if (tipo === "pais" && usuario?.pais) {
                 ruta = `/rankings/country/${encodeURIComponent(usuario.pais)}`;
@@ -92,21 +98,32 @@ export default function Ranking() {
             {/* Cabecera */}
             <View style={s.header}>
                 <Text style={s.headerTitulo}>Ranking</Text>
-                {miPosicion >= 0 && (
+                {miPosicion >= 0 ? (
+                    // El usuario está en el top → mostramos su posición
                     <View style={s.miPosicionBadge}>
                         <Text style={s.miPosicionTexto}>#{miPosicion + 1}</Text>
                     </View>
-                )}
+                ) : (tab === "semana" || tab === "mes") && ranking.length > 0 ? (
+                    // En tabs de período, si hay datos pero el usuario no aparece,
+                    // es que no tiene check-ins en ese intervalo → fuera del top
+                    <View style={s.fueraBadge}>
+                        <Text style={s.fueraBadgeTexto}>Fuera del top 100</Text>
+                    </View>
+                ) : null}
             </View>
 
-            {/* Tabs */}
+            {/* Tabs de navegación */}
             <ScrollView
                 horizontal
                 showsHorizontalScrollIndicator={false}
                 contentContainerStyle={s.tabsScroll}
                 style={s.tabsWrapper}
             >
-                <TabBtn label="Global" activo={tab === "global"} onPress={() => cambiarTab("global")} />
+                <TabBtn label="Global"       activo={tab === "global"} onPress={() => cambiarTab("global")} />
+                <TabBtn label="Esta semana"  activo={tab === "semana"} onPress={() => cambiarTab("semana")}
+                    icono="calendar-outline" />
+                <TabBtn label="Este mes"     activo={tab === "mes"}    onPress={() => cambiarTab("mes")}
+                    icono="stats-chart-outline" />
                 {usuario?.pais && (
                     <TabBtn label={usuario.pais} activo={tab === "pais"} onPress={() => cambiarTab("pais")} />
                 )}
@@ -277,6 +294,14 @@ const s = StyleSheet.create({
         paddingVertical: 5,
     },
     miPosicionTexto: { fontSize: 13, fontWeight: "700", color: "#F7C948" },
+    // Badge secundario cuando el usuario no está en el top del período
+    fueraBadge: {
+        backgroundColor: "#F0EDE6",
+        borderRadius: 20,
+        paddingHorizontal: 10,
+        paddingVertical: 5,
+    },
+    fueraBadgeTexto: { fontSize: 11, fontWeight: "600", color: "#9AAABB" },
 
     tabsWrapper: { maxHeight: 44, marginBottom: 16 },
     tabsScroll: { paddingHorizontal: 24, gap: 8 },

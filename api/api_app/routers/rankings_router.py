@@ -7,19 +7,18 @@
 #
 # Rankings disponibles:
 # - ranking dentro de un grupo
-# - ranking global de usuarios
+# - ranking global de usuarios (histórico, semanal, mensual)
 # - ranking por país
 # - ranking por ciudad
 #
 # Importante:
-# Antes el ranking se calculaba sumando points_ledger en cada consulta.
-# Ahora se usa la tabla user_points_total, que guarda el total de puntos
-# de cada usuario ya resumido.
-#
-# Esto sirve para:
-# - que el ranking cargue más rápido
-# - evitar castigar la base de datos cuando haya muchos check-ins
-# - mantener points_ledger como historial real de movimientos
+# - El ranking histórico usa user_points_total (tabla resumen) para
+#   ser rápido aunque haya millones de check-ins.
+# - Los rankings por período (semanal/mensual) suman directamente
+#   desde points_ledger filtrando por fecha, porque no existe tabla
+#   resumen por período.
+# - Solo aparecen en los rankings de período los usuarios que han
+#   tenido al menos un check-in en ese intervalo de tiempo.
 #
 # Seguridad OWASP aplicada:
 #
@@ -33,6 +32,7 @@
 #     * el sistema ya tiene audit logs disponibles
 # -------------------------------------------------------------------
 
+from datetime import datetime, timedelta, timezone
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, status
@@ -40,7 +40,7 @@ from sqlalchemy.orm import Session
 from sqlalchemy import func
 
 from ..database import get_db
-from ..models import Group, GroupMember, User, UserPointsTotal
+from ..models import Group, GroupMember, PointsLedger, User, UserPointsTotal
 from ..schemas import RankingEntry
 from ..auth import get_current_user
 
@@ -204,6 +204,106 @@ def obtener_ranking_global(
         User.is_active == True
     ).order_by(
         puntos_total.desc(),
+        User.username.asc()
+    ).limit(100).all()
+
+    return construir_respuesta_ranking(filas)
+
+
+# -------------------------------------------------------------------
+# ENDPOINT: ranking global semanal
+# -------------------------------------------------------------------
+# Suma los puntos ganados por check-ins en los últimos 7 días.
+# Solo aparecen usuarios con al menos un check-in en ese período.
+# -------------------------------------------------------------------
+@router.get("/global/weekly", response_model=list[RankingEntry])
+def obtener_ranking_semanal(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """
+    Devuelve el ranking de puntos de los últimos 7 días.
+
+    Qué hace:
+    - calcula la fecha de corte: ahora menos 7 días
+    - suma los deltas de points_ledger con reason='checkin' en ese rango
+    - solo incluye usuarios activos
+    - ordena de mayor a menor
+    - limita a los 100 primeros
+    """
+    # Fecha de corte: hace exactamente 7 días en UTC
+    hace_7_dias = datetime.now(timezone.utc) - timedelta(days=7)
+
+    # Suma de puntos de check-ins en el período
+    puntos_periodo = func.sum(PointsLedger.delta)
+
+    filas = db.query(
+        User.id.label("user_id"),
+        User.username.label("username"),
+        func.coalesce(puntos_periodo, 0).label("points")
+    ).join(
+        # Inner join: solo usuarios que tienen entradas en el ledger
+        PointsLedger,
+        PointsLedger.user_id == User.id
+    ).filter(
+        User.is_active == True,
+        PointsLedger.reason == "checkin",          # solo puntos de check-in
+        PointsLedger.created_at >= hace_7_dias     # dentro del período
+    ).group_by(
+        User.id,
+        User.username
+    ).order_by(
+        puntos_periodo.desc(),
+        User.username.asc()
+    ).limit(100).all()
+
+    return construir_respuesta_ranking(filas)
+
+
+# -------------------------------------------------------------------
+# ENDPOINT: ranking global mensual
+# -------------------------------------------------------------------
+# Suma los puntos ganados por check-ins en los últimos 30 días.
+# Solo aparecen usuarios con al menos un check-in en ese período.
+# -------------------------------------------------------------------
+@router.get("/global/monthly", response_model=list[RankingEntry])
+def obtener_ranking_mensual(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """
+    Devuelve el ranking de puntos de los últimos 30 días.
+
+    Qué hace:
+    - calcula la fecha de corte: ahora menos 30 días
+    - suma los deltas de points_ledger con reason='checkin' en ese rango
+    - solo incluye usuarios activos
+    - ordena de mayor a menor
+    - limita a los 100 primeros
+    """
+    # Fecha de corte: hace exactamente 30 días en UTC
+    hace_30_dias = datetime.now(timezone.utc) - timedelta(days=30)
+
+    # Suma de puntos de check-ins en el período
+    puntos_periodo = func.sum(PointsLedger.delta)
+
+    filas = db.query(
+        User.id.label("user_id"),
+        User.username.label("username"),
+        func.coalesce(puntos_periodo, 0).label("points")
+    ).join(
+        # Inner join: solo usuarios que tienen entradas en el ledger
+        PointsLedger,
+        PointsLedger.user_id == User.id
+    ).filter(
+        User.is_active == True,
+        PointsLedger.reason == "checkin",           # solo puntos de check-in
+        PointsLedger.created_at >= hace_30_dias     # dentro del período
+    ).group_by(
+        User.id,
+        User.username
+    ).order_by(
+        puntos_periodo.desc(),
         User.username.asc()
     ).limit(100).all()
 
