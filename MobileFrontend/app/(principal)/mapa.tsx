@@ -19,6 +19,7 @@ import { useFocusEffect } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import { usarAuth } from "../../contexto/ContextoAuth";
 import { hacerPeticion } from "../../servicios/api";
+import { AvatarCirculo } from "../../componentes/AvatarCirculo";
 
 type CheckinMapa = {
     id: string;
@@ -113,9 +114,18 @@ export default function Mapa() {
 
             {/* Cabecera */}
             <View style={s.header}>
-                <View>
-                    <Text style={s.headerNombre}>{usuario?.username}</Text>
-                    <Text style={s.headerSub}>Tu mapa de cervezas</Text>
+                <View style={s.headerUsuario}>
+                    <AvatarCirculo
+                        uri={usuario?.avatar_url}
+                        username={usuario?.username ?? "?"}
+                        size={36}
+                        colorFondo="#10233E"
+                        colorTexto="#FFFFFF"
+                    />
+                    <View>
+                        <Text style={s.headerNombre}>{usuario?.username}</Text>
+                        <Text style={s.headerSub}>Tu mapa de cervezas</Text>
+                    </View>
                 </View>
                 <View style={s.headerPts}>
                     <Text style={s.headerPtsNum}>{checkins.length}</Text>
@@ -387,6 +397,7 @@ const s = StyleSheet.create({
         paddingTop: 20,
         paddingBottom: 16,
     },
+    headerUsuario: { flexDirection: "row", alignItems: "center", gap: 10 },
     headerNombre: { fontSize: 20, fontWeight: "700", color: "#10233E", letterSpacing: -0.4 },
     headerSub: { fontSize: 12, color: "#6B85A8", marginTop: 2 },
     headerPts: { flexDirection: "row", alignItems: "baseline" },

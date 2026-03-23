@@ -133,6 +133,25 @@ export const obtenerMisStats = async (token: string) => {
 };
 
 /*
+ * Este método envía al backend la URL pública de Cloudinary
+ * para actualizar la foto de perfil del usuario.
+ *
+ * El frontend sube la imagen directamente a Cloudinary ANTES
+ * de llamar a esta función. Aquí solo guardamos la URL resultante.
+ *
+ * Devuelve el perfil actualizado con el nuevo avatar_url.
+ */
+export const actualizarAvatar = async (token: string, avatarUrl: string) => {
+    const respuesta = await hacerPeticion("/auth/me/avatar", {
+        metodo: "PATCH",
+        token: token,
+        body: { avatar_url: avatarUrl }
+    });
+
+    return respuesta;
+};
+
+/*
  * Este método pide al backend los datos del usuario autenticado.
  *
  * Necesita:

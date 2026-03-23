@@ -67,6 +67,16 @@ class RefreshRequest(BaseModel):
     refresh_token: str
 
 
+class AvatarUpdateRequest(BaseModel):
+    """
+    URL pública de Cloudinary con la nueva foto de perfil.
+    El frontend sube la imagen directamente a Cloudinary y
+    aquí solo enviamos la URL resultante para que el backend
+    la guarde en la BD.
+    """
+    avatar_url: str = Field(min_length=10, max_length=500)
+
+
 # =========================================================
 # GROUPS
 # =========================================================

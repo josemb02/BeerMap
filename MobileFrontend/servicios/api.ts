@@ -12,7 +12,7 @@ import { API_URL } from "../utils/constantes";
  */
 
 type OpcionesPeticion = {
-    metodo?: "GET" | "POST" | "PUT" | "DELETE";
+    metodo?: "GET" | "POST" | "PUT" | "PATCH" | "DELETE";
     token?: string | null;
     body?: any;
     /*

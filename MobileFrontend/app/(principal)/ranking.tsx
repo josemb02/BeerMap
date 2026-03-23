@@ -13,6 +13,7 @@ import { useFocusEffect } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import { usarAuth } from "../../contexto/ContextoAuth";
 import { hacerPeticion } from "../../servicios/api";
+import { AvatarCirculo } from "../../componentes/AvatarCirculo";
 
 type EntradaRanking = {
     user_id: string;
@@ -122,7 +123,7 @@ export default function Ranking() {
 
             {/* Podio top 3 */}
             {!cargando && ranking.length >= 3 && (
-                <Podio top3={ranking.slice(0, 3)} miId={usuario?.id} />
+                <Podio top3={ranking.slice(0, 3)} miId={usuario?.id} avatarUri={usuario?.avatar_url} />
             )}
 
             {/* Lista */}
@@ -146,6 +147,7 @@ export default function Ranking() {
                             entrada={item}
                             posicion={index + 4}
                             esMio={item.user_id === usuario?.id}
+                            avatarUri={usuario?.avatar_url}
                         />
                     )}
                     ItemSeparatorComponent={() => <View style={s.separador} />}
@@ -157,7 +159,11 @@ export default function Ranking() {
 
 // ─── Podio ────────────────────────────────────────────────────────────────────
 
-function Podio({ top3, miId }: { top3: EntradaRanking[]; miId?: string }) {
+function Podio({ top3, miId, avatarUri }: {
+    top3: EntradaRanking[];
+    miId?: string;
+    avatarUri?: string | null;
+}) {
     const orden = [top3[1], top3[0], top3[2]]; // 2º - 1º - 3º
     const alturas = [72, 96, 56];
     const medallas = ["🥈", "🥇", "🥉"];
@@ -165,43 +171,48 @@ function Podio({ top3, miId }: { top3: EntradaRanking[]; miId?: string }) {
 
     return (
         <View style={s.podio}>
-            {orden.map((entrada, i) => (
-                <View key={entrada.user_id} style={s.podioColumna}>
-                    <Text style={s.podioMedalla}>{medallas[i]}</Text>
-                    <View style={[
-                        s.podioAvatar,
-                        entrada.user_id === miId && s.podioAvatarMio
-                    ]}>
-                        <Text style={s.podioAvatarTexto}>
-                            {entrada.username.charAt(0).toUpperCase()}
-                        </Text>
+            {orden.map((entrada, i) => {
+                const esMio = entrada.user_id === miId;
+                return (
+                    <View key={entrada.user_id} style={s.podioColumna}>
+                        <Text style={s.podioMedalla}>{medallas[i]}</Text>
+                        <AvatarCirculo
+                            uri={esMio ? avatarUri : null}
+                            username={entrada.username}
+                            size={44}
+                            colorFondo={esMio ? "#10233E" : "#E2E8F0"}
+                            colorTexto={esMio ? "#FFFFFF" : "#10233E"}
+                        />
+                        <Text style={s.podioNombre} numberOfLines={1}>{entrada.username}</Text>
+                        <Text style={s.podioPuntos}>{entrada.points} pts</Text>
+                        <View style={[s.podioBase, { height: alturas[i] }]}>
+                            <Text style={s.podioPos}>#{posiciones[i]}</Text>
+                        </View>
                     </View>
-                    <Text style={s.podioNombre} numberOfLines={1}>{entrada.username}</Text>
-                    <Text style={s.podioPuntos}>{entrada.points} pts</Text>
-                    <View style={[s.podioBase, { height: alturas[i] }]}>
-                        <Text style={s.podioPos}>#{posiciones[i]}</Text>
-                    </View>
-                </View>
-            ))}
+                );
+            })}
         </View>
     );
 }
 
 // ─── Fila ranking ─────────────────────────────────────────────────────────────
 
-function FilaRanking({ entrada, posicion, esMio }: {
+function FilaRanking({ entrada, posicion, esMio, avatarUri }: {
     entrada: EntradaRanking;
     posicion: number;
     esMio: boolean;
+    avatarUri?: string | null;
 }) {
     return (
         <View style={[s.fila, esMio && s.filaMia]}>
             <Text style={s.filaPosicion}>{String(posicion).padStart(2, "0")}</Text>
-            <View style={[s.filaAvatar, esMio && s.filaAvatarMio]}>
-                <Text style={[s.filaAvatarTexto, esMio && s.filaAvatarTextoMio]}>
-                    {entrada.username.charAt(0).toUpperCase()}
-                </Text>
-            </View>
+            <AvatarCirculo
+                uri={esMio ? avatarUri : null}
+                username={entrada.username}
+                size={36}
+                colorFondo={esMio ? "#10233E" : "#E2E8F0"}
+                colorTexto={esMio ? "#FFFFFF" : "#10233E"}
+            />
             <Text style={[s.filaUsername, esMio && s.filaUsernameMio]} numberOfLines={1}>
                 {entrada.username}
             </Text>

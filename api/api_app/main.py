@@ -42,7 +42,7 @@ from sqlalchemy.exc import SQLAlchemyError
 from .config import settings
 from .database import get_db
 from .models import User, Checkin, UserPointsTotal, GroupMember
-from .schemas import RegisterRequest, LoginRequest, TokenResponse, RefreshRequest
+from .schemas import RegisterRequest, LoginRequest, TokenResponse, RefreshRequest, AvatarUpdateRequest
 from .auth import (
     hash_password,
     verify_password,
@@ -384,6 +384,66 @@ def auth_me(current_user: User = Depends(get_current_user)):
         "pais": current_user.pais,
         "ciudad": current_user.ciudad,
         "role": current_user.role,
+        "avatar_url": current_user.avatar_url,
+    }
+
+
+# -------------------------------------------------------------------
+# AUTH - ME/AVATAR
+# -------------------------------------------------------------------
+# El frontend sube la imagen directamente a Cloudinary (sin pasar
+# por el backend). Este endpoint solo recibe la URL resultante y
+# la guarda en la BD.
+#
+# Seguridad:
+# - OWASP A01: protegido con get_current_user
+# - OWASP A03: validamos que la URL pertenezca a nuestro cloud
+#   para evitar que alguien guarde URLs arbitrarias
+# -------------------------------------------------------------------
+@app.patch("/auth/me/avatar")
+def auth_me_avatar(
+    payload: AvatarUpdateRequest,
+    request: Request,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """
+    Actualiza la foto de perfil del usuario autenticado.
+
+    Solo acepta URLs de nuestro cloud de Cloudinary.
+    El frontend es responsable de subir la imagen directamente
+    a Cloudinary antes de llamar a este endpoint.
+    """
+    # Validamos que la URL provenga de nuestro cloud de Cloudinary.
+    # Esto evita que se guarden URLs arbitrarias o de otros servicios.
+    CLOUDINARY_PREFIX = "https://res.cloudinary.com/dxfvlrxaw/"
+    if not payload.avatar_url.startswith(CLOUDINARY_PREFIX):
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="La URL de imagen no pertenece al servicio permitido"
+        )
+
+    current_user.avatar_url = payload.avatar_url
+    current_user.updated_at = datetime.now(timezone.utc)
+    db.commit()
+    db.refresh(current_user)
+
+    write_audit_log(
+        db=db,
+        action="avatar_updated",
+        request=request,
+        user_id=current_user.id
+    )
+
+    return {
+        "id": str(current_user.id),
+        "username": current_user.username,
+        "email": current_user.email,
+        "fecha_nacimiento": current_user.fecha_nacimiento,
+        "pais": current_user.pais,
+        "ciudad": current_user.ciudad,
+        "role": current_user.role,
+        "avatar_url": current_user.avatar_url,
     }
 
 

@@ -13,6 +13,7 @@ import {
     registrarUsuario,
     refrescarToken,
     cerrarSesionBackend,
+    actualizarAvatar,
 } from "../servicios/servicioAuth";
 import { configurarCallbacksAuth } from "../servicios/api";
 
@@ -45,6 +46,8 @@ type UsuarioAuth = {
     pais?: string | null;
     ciudad?: string | null;
     role?: string;
+    // URL pública de Cloudinary. Null si aún no ha subido foto.
+    avatar_url?: string | null;
 };
 
 /*
@@ -65,6 +68,11 @@ type TipoContextoAuth = {
     ) => Promise<void>;
     cerrarSesion: () => Promise<void>;
     recargarUsuario: () => Promise<void>;
+    /*
+     * Guarda la URL del avatar en el backend y actualiza el estado local.
+     * Se llama desde perfil.tsx tras subir la imagen a Cloudinary.
+     */
+    guardarAvatar: (avatarUrl: string) => Promise<void>;
 };
 
 /*
@@ -259,6 +267,22 @@ function ProveedorAuth({ children }: { children: React.ReactNode }) {
         setUsuario(perfil);
     }
 
+    /*
+     * Este método envía la URL del avatar al backend y actualiza
+     * el estado local del usuario para que todos los componentes
+     * vean la foto nueva inmediatamente sin recargar sesión.
+     *
+     * La subida a Cloudinary la hace el frontend antes de llamar aquí.
+     */
+    async function guardarAvatar(avatarUrl: string) {
+        if (!token) return;
+
+        const perfilActualizado = await actualizarAvatar(token, avatarUrl);
+
+        // Actualizamos solo el campo avatar_url manteniendo el resto del perfil
+        setUsuario(prev => prev ? { ...prev, avatar_url: perfilActualizado.avatar_url } : prev);
+    }
+
     return (
         <ContextoAuth.Provider
             value={{
@@ -268,7 +292,8 @@ function ProveedorAuth({ children }: { children: React.ReactNode }) {
                 iniciarSesion,
                 registrarNuevoUsuario,
                 cerrarSesion,
-                recargarUsuario
+                recargarUsuario,
+                guardarAvatar,
             }}
         >
             {children}

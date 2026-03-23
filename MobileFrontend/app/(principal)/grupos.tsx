@@ -18,6 +18,7 @@ import { useFocusEffect } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import { usarAuth } from "../../contexto/ContextoAuth";
 import { hacerPeticion } from "../../servicios/api";
+import { AvatarCirculo } from "../../componentes/AvatarCirculo";
 
 type Grupo = { id: string; name: string; join_code: string };
 type Miembro = { id: string; username: string };
@@ -270,11 +271,13 @@ function DetalleGrupo({ grupo, token, onVolver }: {
                                 return (
                                     <View style={[s.rankFila, esMio && s.rankFilaMia]}>
                                         <Text style={s.rankPos}>{String(index + 1).padStart(2, "0")}</Text>
-                                        <View style={[s.rankAvatar, esMio && s.rankAvatarMio]}>
-                                            <Text style={[s.rankAvatarTexto, esMio && s.rankAvatarTextoMio]}>
-                                                {item.username.charAt(0).toUpperCase()}
-                                            </Text>
-                                        </View>
+                                        <AvatarCirculo
+                                            uri={esMio ? usuario?.avatar_url : null}
+                                            username={item.username}
+                                            size={36}
+                                            colorFondo={esMio ? "#10233E" : "#E2E8F0"}
+                                            colorTexto={esMio ? "#FFFFFF" : "#10233E"}
+                                        />
                                         <Text style={s.rankNombre} numberOfLines={1}>{item.username}</Text>
                                         <Text style={s.rankPuntos}>{item.points} <Text style={s.rankPtsSuf}>pts</Text></Text>
                                     </View>
@@ -291,14 +294,21 @@ function DetalleGrupo({ grupo, token, onVolver }: {
                             keyExtractor={m => m.id}
                             contentContainerStyle={s.lista}
                             showsVerticalScrollIndicator={false}
-                            renderItem={({ item }) => (
-                                <View style={s.miembroFila}>
-                                    <View style={s.miembroAvatar}>
-                                        <Text style={s.miembroAvatarTexto}>{item.username.charAt(0).toUpperCase()}</Text>
+                            renderItem={({ item }) => {
+                                const esMio = item.id === usuario?.id;
+                                return (
+                                    <View style={s.miembroFila}>
+                                        <AvatarCirculo
+                                            uri={esMio ? usuario?.avatar_url : null}
+                                            username={item.username}
+                                            size={40}
+                                            colorFondo={esMio ? "#10233E" : "#F0EDE6"}
+                                            colorTexto={esMio ? "#FFFFFF" : "#10233E"}
+                                        />
+                                        <Text style={s.miembroNombre}>{item.username}</Text>
                                     </View>
-                                    <Text style={s.miembroNombre}>{item.username}</Text>
-                                </View>
-                            )}
+                                );
+                            }}
                             ItemSeparatorComponent={() => <View style={s.sep} />}
                         />
                     )}

@@ -14,4 +14,6 @@ email-validator
 
 pytest
 httpx
-redis 
+redis
+
+cloudinary

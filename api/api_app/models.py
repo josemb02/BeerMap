@@ -68,6 +68,10 @@ class User(Base):
     pais = Column(String(80), nullable=True)
     ciudad = Column(String(120), nullable=True)
 
+    # URL pública de la foto de perfil almacenada en Cloudinary.
+    # Null si el usuario aún no ha subido foto.
+    avatar_url = Column(String(500), nullable=True)
+
     role = Column(String(10), nullable=False, server_default="user")
     is_active = Column(Boolean, nullable=False, server_default=text("true"))
 

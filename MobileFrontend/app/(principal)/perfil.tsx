@@ -11,8 +11,42 @@ import {
 } from "react-native";
 import { useFocusEffect, useRouter } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
+import * as ImagePicker from "expo-image-picker";
 import { usarAuth } from "../../contexto/ContextoAuth";
 import { obtenerMisStats } from "../../servicios/servicioAuth";
+import { AvatarCirculo } from "../../componentes/AvatarCirculo";
+
+/*
+ * Cloud name de Cloudinary y preset sin firma configurados en el panel.
+ * El preset "mapa_cervecería_avatares" permite subida directa sin API key.
+ */
+const CLOUD_NAME = "dxfvlrxaw";
+const UPLOAD_PRESET = "mapa_cervecería_avatares";
+
+/*
+ * Sube una imagen local directamente a Cloudinary usando el preset sin firma.
+ * Devuelve la URL pública (secure_url) de la imagen subida.
+ */
+async function subirACloudinary(uri: string): Promise<string> {
+    const extension = uri.split(".").pop()?.toLowerCase() || "jpg";
+    const tipo = extension === "png" ? "image/png" : "image/jpeg";
+
+    const formData = new FormData();
+    formData.append("file", { uri, type: tipo, name: `avatar.${extension}` } as any);
+    formData.append("upload_preset", UPLOAD_PRESET);
+
+    const respuesta = await fetch(
+        `https://api.cloudinary.com/v1_1/${CLOUD_NAME}/image/upload`,
+        { method: "POST", body: formData }
+    );
+
+    if (!respuesta.ok) {
+        throw new Error("No se pudo subir la imagen. Inténtalo de nuevo.");
+    }
+
+    const datos = await respuesta.json();
+    return datos.secure_url as string;
+}
 
 /*
  * Tipo con todas las estadísticas que devuelve el backend en /auth/me/stats.
@@ -30,9 +64,10 @@ type Stats = {
 // ─────────────────────────────────────────────────────────────────────────────
 
 export default function Perfil() {
-    const { usuario, cerrarSesion, token } = usarAuth();
+    const { usuario, cerrarSesion, token, guardarAvatar } = usarAuth();
     const router = useRouter();
     const [cerrando, setCerrando] = useState(false);
+    const [subiendo, setSubiendo] = useState(false);
     const [stats, setStats] = useState<Stats | null>(null);
     const [cargando, setCargando] = useState(true);
 
@@ -50,6 +85,38 @@ export default function Perfil() {
             setStats(data);
         } catch {}
         finally { setCargando(false); }
+    }
+
+    /*
+     * Abre el selector de imagen del dispositivo, sube la imagen
+     * elegida a Cloudinary y guarda la URL en el backend.
+     */
+    async function handleCambiarFoto() {
+        // Pedimos permiso de acceso a la galería
+        const permiso = await ImagePicker.requestMediaLibraryPermissionsAsync();
+        if (!permiso.granted) {
+            Alert.alert("Permiso denegado", "Necesitamos acceso a tus fotos para cambiar el avatar.");
+            return;
+        }
+
+        const resultado = await ImagePicker.launchImageLibraryAsync({
+            mediaTypes: ImagePicker.MediaTypeOptions.Images,
+            allowsEditing: true,
+            aspect: [1, 1],
+            quality: 0.8,
+        });
+
+        if (resultado.canceled || !resultado.assets[0]) return;
+
+        try {
+            setSubiendo(true);
+            const url = await subirACloudinary(resultado.assets[0].uri);
+            await guardarAvatar(url);
+        } catch (err: any) {
+            Alert.alert("Error", err?.message || "No se pudo actualizar la foto.");
+        } finally {
+            setSubiendo(false);
+        }
     }
 
     async function handleCerrarSesion() {
@@ -70,8 +137,6 @@ export default function Perfil() {
 
     if (!usuario) return null;
 
-    const inicial = usuario.username.charAt(0).toUpperCase();
-
     // Insignias calculadas a partir de las stats del backend
     const insignias = stats
         ? calcularInsignias(stats.total_checkins, stats.total_gastado, stats.total_grupos)
@@ -81,11 +146,28 @@ export default function Perfil() {
         <SafeAreaView style={s.root}>
             <ScrollView contentContainerStyle={s.scroll} showsVerticalScrollIndicator={false}>
 
-                {/* Avatar */}
+                {/* Avatar — al pulsar se abre el selector de imagen */}
                 <View style={s.hero}>
-                    <View style={s.avatar}>
-                        <Text style={s.avatarTexto}>{inicial}</Text>
-                    </View>
+                    <Pressable
+                        style={({ pressed }) => [s.avatarWrap, pressed && { opacity: 0.75 }]}
+                        onPress={handleCambiarFoto}
+                        disabled={subiendo}
+                    >
+                        <AvatarCirculo
+                            uri={usuario.avatar_url}
+                            username={usuario.username}
+                            size={80}
+                            colorFondo="#10233E"
+                            colorTexto="#FFFFFF"
+                        />
+                        {/* Icono de cámara superpuesto en la esquina */}
+                        <View style={s.avatarCamara}>
+                            {subiendo
+                                ? <ActivityIndicator size={10} color="#FFFFFF" />
+                                : <Ionicons name="camera" size={12} color="#FFFFFF" />
+                            }
+                        </View>
+                    </Pressable>
                     <Text style={s.nombre}>{usuario.username}</Text>
                     <Text style={s.email}>{usuario.email}</Text>
                     {(usuario.ciudad || usuario.pais) && (
@@ -275,14 +357,25 @@ const s = StyleSheet.create({
     scroll: { paddingHorizontal: 24, paddingTop: 24, paddingBottom: 40 },
 
     hero: { alignItems: "center", marginBottom: 20 },
-    avatar: {
-        width: 80, height: 80, borderRadius: 40,
-        backgroundColor: "#10233E",
-        justifyContent: "center", alignItems: "center",
+    avatarWrap: {
+        position: "relative",
         marginBottom: 14,
         shadowColor: "#10233E",
         shadowOffset: { width: 0, height: 4 },
         shadowOpacity: 0.2, shadowRadius: 10, elevation: 4,
+    },
+    avatarCamara: {
+        position: "absolute", bottom: 0, right: 0,
+        width: 24, height: 24, borderRadius: 12,
+        backgroundColor: "#10233E",
+        justifyContent: "center", alignItems: "center",
+        borderWidth: 2, borderColor: "#F7F4EC",
+    },
+    // Mantenido por compatibilidad aunque ya no se usa directamente
+    avatar: {
+        width: 80, height: 80, borderRadius: 40,
+        backgroundColor: "#10233E",
+        justifyContent: "center", alignItems: "center",
     },
     avatarTexto: { fontSize: 32, fontWeight: "700", color: "#FFFFFF" },
     nombre: { fontSize: 22, fontWeight: "700", color: "#10233E", letterSpacing: -0.5, marginBottom: 4 },
