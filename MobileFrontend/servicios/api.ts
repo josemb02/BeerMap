@@ -186,7 +186,13 @@ export const hacerPeticion = async (
                     mensajeError = datos.error.message;
                 }
             } else if (datos.detail) {
-                mensajeError = datos.detail;
+                // FastAPI puede devolver detail como string o como array de errores de validación.
+                // Si es array (errores de validación Pydantic), extraemos los mensajes.
+                if (Array.isArray(datos.detail)) {
+                    mensajeError = datos.detail.map((d: any) => d.msg ?? d).join(", ");
+                } else {
+                    mensajeError = datos.detail;
+                }
             }
         }
 

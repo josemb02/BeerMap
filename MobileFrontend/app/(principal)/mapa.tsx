@@ -7,13 +7,13 @@ import {
     Modal,
     Platform,
     Pressable,
-    SafeAreaView,
     ScrollView,
     StyleSheet,
     Text,
     TextInput,
     View,
 } from "react-native";
+import { SafeAreaView } from "react-native-safe-area-context";
 import * as Haptics from "expo-haptics";
 import MapView, { Marker, PROVIDER_DEFAULT } from "react-native-maps";
 import * as Location from "expo-location";
@@ -133,8 +133,13 @@ export default function Mapa() {
             setCargando(true);
             const datos = await hacerPeticion("/checkins/my-map", { metodo: "GET", token });
             setCheckins(datos);
-        } catch {}
-        finally { setCargando(false); }
+        } catch (e: any) {
+            // Mostramos el error para poder diagnosticarlo — antes se tragaba en silencio
+            console.error("[Mapa] Error al cargar check-ins:", e?.message);
+            Alert.alert("Error al cargar el mapa", mensajeAmigable(e));
+        } finally {
+            setCargando(false);
+        }
     }
 
     const totalGastado = checkins
@@ -195,20 +200,13 @@ export default function Mapa() {
                 </View>
             </View>
 
-            {/* Mapa */}
+            {/* Mapa — ocupa todo el espacio restante */}
             {cargando ? (
                 <View style={s.mapaPlaceholder}>
                     <ActivityIndicator color="#10233E" />
                 </View>
             ) : (
                 <View style={s.mapaContenedor}>
-                    {/* Banner flotante cuando el usuario aún no tiene ningún check-in */}
-                    {checkins.length === 0 && (
-                        <View pointerEvents="none" style={s.mapaSinDatos}>
-                            <Text style={s.mapaSinDatosTitulo}>¡Registra tu primera cerveza!</Text>
-                            <Text style={s.mapaSinDatosTexto}>Pulsa + para empezar</Text>
-                        </View>
-                    )}
                     <MapView
                         style={s.mapa}
                         provider={PROVIDER_DEFAULT}
@@ -237,7 +235,7 @@ export default function Mapa() {
                                     <Text style={s.markerEmoji}>
                                         {c.icon_emoji ?? "🍺"}
                                     </Text>
-                                    {/* Indicador visual de foto */}
+                                    {/* Punto naranja si el check-in tiene foto */}
                                     {c.foto_url && (
                                         <View style={s.markerFotoBadge} />
                                     )}
@@ -245,16 +243,16 @@ export default function Mapa() {
                             </Marker>
                         ))}
                     </MapView>
+
+                    {/* Botón "Registrar cerveza" flotando sobre el mapa en la parte inferior */}
+                    <Pressable
+                        style={({ pressed }) => [s.btnRegistrar, pressed && s.btnPressed]}
+                        onPress={() => setModalCheckin(true)}
+                    >
+                        <Text style={s.btnRegistrarTexto}>Registrar cerveza</Text>
+                    </Pressable>
                 </View>
             )}
-
-            {/* FAB */}
-            <Pressable
-                style={({ pressed }) => [s.fab, pressed && s.fabPressed]}
-                onPress={() => setModalCheckin(true)}
-            >
-                <Ionicons name="add" size={28} color="#FFFFFF" />
-            </Pressable>
 
             <ModalCheckin
                 visible={modalCheckin}
@@ -344,6 +342,7 @@ function ModalCheckin({ visible, token, onCerrar, onExito }: {
             const ic = iconoSeleccionado ? misIconos.find(x => x.id === iconoSeleccionado) : null;
             body.icon_emoji = ic?.emoji ?? "🍺";
 
+            console.log("[Checkin] body:", JSON.stringify(body));
             await hacerPeticion("/checkins", { metodo: "POST", token, body });
 
             // Vibración corta de éxito al registrar la cerveza
@@ -566,30 +565,10 @@ const s = StyleSheet.create({
     statLabel: { fontSize: 11, color: "#9AAABB", letterSpacing: 0.2 },
     statDivider: { width: 1, backgroundColor: "#E2E8F0", marginVertical: 4 },
 
+    // El contenedor ocupa todo el espacio disponible y aplica el border radius al mapa
     mapaContenedor: { flex: 1, marginHorizontal: 16, marginBottom: 16, borderRadius: 16, overflow: "hidden" },
     mapa: { flex: 1 },
     mapaPlaceholder: { flex: 1, justifyContent: "center", alignItems: "center" },
-
-    // Banner flotante sobre el mapa cuando no hay check-ins
-    mapaSinDatos: {
-        position: "absolute",
-        bottom: 20,
-        left: 16,
-        right: 16,
-        zIndex: 10,
-        alignItems: "center",
-        backgroundColor: "rgba(255,255,255,0.95)",
-        borderRadius: 16,
-        paddingVertical: 14,
-        paddingHorizontal: 20,
-        shadowColor: "#10233E",
-        shadowOffset: { width: 0, height: 2 },
-        shadowOpacity: 0.1,
-        shadowRadius: 8,
-        elevation: 4,
-    },
-    mapaSinDatosTitulo: { fontSize: 15, fontWeight: "700", color: "#10233E", marginBottom: 4 },
-    mapaSinDatosTexto: { fontSize: 13, color: "#6B85A8" },
 
     marker: {
         width: 42,
@@ -615,23 +594,20 @@ const s = StyleSheet.create({
         borderWidth: 1, borderColor: "#FFFFFF",
     },
 
-    fab: {
+    // Botón flotante sobre el mapa — posición absoluta en la esquina inferior
+    btnRegistrar: {
         position: "absolute",
-        bottom: 28,
-        right: 24,
-        width: 56,
-        height: 56,
-        borderRadius: 28,
+        bottom: 16,
+        left: 16,
+        right: 16,
+        height: 52,
         backgroundColor: "#10233E",
+        borderRadius: 14,
         justifyContent: "center",
         alignItems: "center",
-        shadowColor: "#10233E",
-        shadowOffset: { width: 0, height: 4 },
-        shadowOpacity: 0.3,
-        shadowRadius: 8,
-        elevation: 6,
+        zIndex: 10,
     },
-    fabPressed: { opacity: 0.8 },
+    btnRegistrarTexto: { color: "#FFFFFF", fontSize: 15, fontWeight: "700", letterSpacing: 0.2 },
 
     overlay: { flex: 1, backgroundColor: "rgba(0,0,0,0.4)", justifyContent: "flex-end" },
     sheet: {
