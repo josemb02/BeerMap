@@ -21,11 +21,15 @@
 # - se valida pertenencia al grupo si el check-in va asociado a grupo
 # -------------------------------------------------------------------
 
+import logging
 from datetime import datetime, timedelta, timezone
 
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 from sqlalchemy import desc
+from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session
+
+logger = logging.getLogger(__name__)
 
 from ..audit import write_audit_log
 from ..auth import get_current_user
@@ -204,9 +208,20 @@ def crear_checkin(
 
     db.add(checkin)
 
-    # flush() fuerza el INSERT para que ya exista checkin.id
-    # antes de crear el movimiento en points_ledger.
-    db.flush()
+    # Capturamos errores de BD aquí para devolver un mensaje claro al frontend
+    # en lugar del genérico "Ha ocurrido un error en la petición".
+    # El caso más habitual es que una columna nueva no exista aún en producción.
+    try:
+        # flush() fuerza el INSERT para que ya exista checkin.id
+        # antes de crear el movimiento en points_ledger.
+        db.flush()
+    except SQLAlchemyError as exc:
+        db.rollback()
+        logger.error("[crear_checkin] Error al insertar check-in: %s", exc)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"No se pudo guardar el check-in. Detalle técnico: {exc}",
+        )
 
     # ---------------------------------------------------------------
     # 6) Se suma +1 punto en el historial real de puntos
@@ -233,8 +248,16 @@ def crear_checkin(
     # ---------------------------------------------------------------
     # 8) Se guarda todo en base de datos
     # ---------------------------------------------------------------
-    db.commit()
-    db.refresh(checkin)
+    try:
+        db.commit()
+        db.refresh(checkin)
+    except SQLAlchemyError as exc:
+        db.rollback()
+        logger.error("[crear_checkin] Error al hacer commit: %s", exc)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"No se pudo confirmar el check-in. Detalle técnico: {exc}",
+        )
 
     # ---------------------------------------------------------------
     # 9) Notificaciones push (silenciosas si fallan)
@@ -310,25 +333,35 @@ def obtener_mi_mapa(
     - cada usuario solo puede ver su propio mapa
     - se usa SQLAlchemy ORM y no SQL manual
     """
-    checkins = db.query(Checkin).filter(
-        Checkin.user_id == current_user.id
-    ).order_by(
-        desc(Checkin.created_at)
-    ).all()
+    # Si la consulta falla (p.ej. columna nueva no existe aún en producción),
+    # devolvemos lista vacía en lugar de un 500 que rompe la pantalla del mapa.
+    try:
+        checkins = db.query(Checkin).filter(
+            Checkin.user_id == current_user.id
+        ).order_by(
+            desc(Checkin.created_at)
+        ).all()
+    except SQLAlchemyError as exc:
+        logger.error("[my-map] Error al consultar check-ins: %s", exc)
+        return []
 
     respuesta = []
 
     for checkin in checkins:
-        respuesta.append(
-            MapCheckinResponse(
-                id=checkin.id,
-                lat=checkin.lat,
-                lng=checkin.lng,
-                precio=checkin.precio,
-                note=checkin.note,
-                foto_url=checkin.foto_url,
-                icon_emoji=checkin.icon_emoji,
+        try:
+            respuesta.append(
+                MapCheckinResponse(
+                    id=checkin.id,
+                    lat=checkin.lat,
+                    lng=checkin.lng,
+                    precio=checkin.precio,
+                    note=getattr(checkin, "note", None),
+                    foto_url=getattr(checkin, "foto_url", None),
+                    icon_emoji=getattr(checkin, "icon_emoji", None),
+                )
             )
-        )
+        except Exception as exc:
+            # Si un check-in individual tiene un campo roto, lo ignoramos
+            logger.warning("[my-map] Check-in %s ignorado por error: %s", checkin.id, exc)
 
     return respuesta

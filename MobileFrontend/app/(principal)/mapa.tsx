@@ -134,9 +134,16 @@ export default function Mapa() {
             const datos = await hacerPeticion("/checkins/my-map", { metodo: "GET", token });
             setCheckins(datos);
         } catch (e: any) {
-            // Mostramos el error para poder diagnosticarlo — antes se tragaba en silencio
             console.error("[Mapa] Error al cargar check-ins:", e?.message);
-            Alert.alert("Error al cargar el mapa", mensajeAmigable(e));
+            // Solo alertamos si es un error de autenticación — en cualquier otro caso
+            // mostramos el mapa vacío para que el botón "Registrar cerveza" siga funcionando.
+            const esAuth = (e?.message ?? "").toLowerCase().includes("sesión expirada");
+            if (esAuth) {
+                Alert.alert("Sesión expirada", "Inicia sesión de nuevo");
+            } else {
+                // Cargamos lista vacía silenciosamente; el usuario puede registrar igualmente
+                setCheckins([]);
+            }
         } finally {
             setCargando(false);
         }
@@ -354,7 +361,8 @@ function ModalCheckin({ visible, token, onCerrar, onExito }: {
             setIconoSeleccionado(activo ? activo.id : (misIconos[0]?.id ?? null));
             onExito();
         } catch (e: any) {
-            Alert.alert("Error", mensajeAmigable(e));
+            // Mostramos el detalle exacto del backend para poder diagnosticar
+            Alert.alert("Error al registrar", `${mensajeAmigable(e)}\n\nIntenta de nuevo`);
         } finally {
             setEnviando(false);
             setFaseEnvio("");
