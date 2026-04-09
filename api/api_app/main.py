@@ -886,8 +886,9 @@ def forgot_password(
                 </div>
                 """,
             })
-        except Exception:
-            pass  # No revelar si el envío falló
+        except Exception as e:
+            import logging
+            logging.getLogger(__name__).error(f"[Resend] Error enviando email: {e}")
 
     return {"detail": "Si el email existe recibirás un correo"}
 
