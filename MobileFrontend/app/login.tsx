@@ -36,8 +36,6 @@ function mensajeAmigable(e: any): string {
     return e?.message || "No se ha podido iniciar sesión";
 }
 
-const GOOGLE_CLIENT_ID = process.env.EXPO_PUBLIC_GOOGLE_CLIENT_ID ?? "";
-
 export default function Login() {
     const router = useRouter();
     const { iniciarSesion, iniciarSesionConGoogle } = usarAuth();
@@ -49,7 +47,9 @@ export default function Login() {
     const [mostrarPassword, setMostrarPassword] = useState(false);
 
     const [request, response, promptAsync] = Google.useAuthRequest({
-        clientId: GOOGLE_CLIENT_ID,
+        webClientId: "126657591225-eligeh84bvbs0hdrid4v6nn8v66fqcn0.apps.googleusercontent.com",
+        androidClientId: "126657591225-au0kosadco1ppoo9sjk2b3b0gvtdcmc3.apps.googleusercontent.com",
+        iosClientId: "126657591225-f6j99vupp2hoksup43athsb5ncqrdu64.apps.googleusercontent.com",
     });
 
     // Procesar respuesta de Google cuando vuelve el flujo OAuth
@@ -96,10 +96,6 @@ export default function Login() {
     };
 
     const manejarLoginGoogle = () => {
-        if (!GOOGLE_CLIENT_ID) {
-            Alert.alert("Configuración pendiente", "El login con Google aún no está configurado.");
-            return;
-        }
         promptAsync();
     };
 
