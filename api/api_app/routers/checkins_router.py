@@ -24,7 +24,7 @@
 import logging
 from datetime import datetime, timedelta, timezone
 
-from fastapi import APIRouter, Depends, HTTPException, Request, status
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 from sqlalchemy import desc
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session
@@ -365,3 +365,35 @@ def obtener_mi_mapa(
             logger.warning("[my-map] Check-in %s ignorado por error: %s", checkin.id, exc)
 
     return respuesta
+
+
+@router.get("/my-history", response_model=list[CheckinResponse])
+def obtener_mi_historial(
+    limite: int = Query(default=50, ge=1, le=200),
+    offset: int = Query(default=0, ge=0),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """
+    Devuelve el historial paginado de check-ins del usuario autenticado,
+    ordenado del más reciente al más antiguo.
+    Usado para la vista de lista en el perfil.
+    """
+    checkins = db.query(Checkin).filter(
+        Checkin.user_id == current_user.id
+    ).order_by(
+        desc(Checkin.created_at)
+    ).offset(offset).limit(limite).all()
+
+    return [
+        CheckinResponse(
+            id=c.id,
+            lat=c.lat,
+            lng=c.lng,
+            precio=c.precio,
+            note=c.note,
+            foto_url=c.foto_url,
+            icon_emoji=c.icon_emoji,
+        )
+        for c in checkins
+    ]

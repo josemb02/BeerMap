@@ -2,7 +2,9 @@ import { useCallback, useState } from "react";
 import {
     ActivityIndicator,
     Alert,
+    Image,
     KeyboardAvoidingView,
+    Linking,
     Modal,
     Platform,
     Pressable,
@@ -19,6 +21,7 @@ import { Ionicons } from "@expo/vector-icons";
 import * as ImagePicker from "expo-image-picker";
 import { usarAuth } from "../../contexto/ContextoAuth";
 import { obtenerMisStats, obtenerMisRachas, cambiarContrasena } from "../../servicios/servicioAuth";
+import { hacerPeticion } from "../../servicios/api";
 import { AvatarCirculo } from "../../componentes/AvatarCirculo";
 
 /*
@@ -60,6 +63,17 @@ async function subirACloudinary(uri: string): Promise<string> {
     return datos.secure_url as string;
 }
 
+type CheckinHistorial = {
+    id: string;
+    lat: string;
+    lng: string;
+    precio: number | null;
+    note: string | null;
+    foto_url: string | null;
+    icon_emoji: string | null;
+    created_at: string;
+};
+
 /*
  * Tipo con todas las estadísticas que devuelve el backend en /auth/me/stats.
  */
@@ -100,6 +114,14 @@ export default function Perfil() {
     const [passNueva, setPassNueva]         = useState("");
     const [passConfirmar, setPassConfirmar] = useState("");
     const [cambiandoPass, setCambiandoPass] = useState(false);
+    // Estado del modal de editar perfil
+    const [modalEditar, setModalEditar] = useState(false);
+    const [editUsername, setEditUsername] = useState("");
+    const [editPais, setEditPais] = useState("");
+    const [editCiudad, setEditCiudad] = useState("");
+    const [guardandoPerfil, setGuardandoPerfil] = useState(false);
+    // Historial de check-ins
+    const [historial, setHistorial] = useState<CheckinHistorial[]>([]);
 
     useFocusEffect(
         useCallback(() => {
@@ -107,17 +129,19 @@ export default function Perfil() {
         }, [token])
     );
 
-    // Carga stats y rachas en paralelo para no hacer dos esperas secuenciales
+    // Carga stats, rachas e historial en paralelo
     async function cargarTodo() {
         if (!token) return;
         try {
             setCargando(true);
-            const [dataStats, dataRachas] = await Promise.all([
+            const [dataStats, dataRachas, dataHistorial] = await Promise.all([
                 obtenerMisStats(token),
                 obtenerMisRachas(token),
+                hacerPeticion("/checkins/my-history?limite=20", { metodo: "GET", token }),
             ]);
             setStats(dataStats);
             setRachas(dataRachas);
+            setHistorial(dataHistorial || []);
         } catch {}
         finally { setCargando(false); }
     }
@@ -193,6 +217,58 @@ export default function Perfil() {
         } finally {
             setCambiandoPass(false);
         }
+    }
+
+    async function handleEditarPerfil() {
+        if (!token) return;
+        const u = editUsername.trim();
+        const p = editPais.trim();
+        const c = editCiudad.trim();
+        if (u.length < 3) {
+            Alert.alert("Error", "El nombre de usuario debe tener al menos 3 caracteres");
+            return;
+        }
+        if (p.length < 2 || c.length < 2) {
+            Alert.alert("Error", "País y ciudad son obligatorios");
+            return;
+        }
+        try {
+            setGuardandoPerfil(true);
+            await hacerPeticion("/auth/me/profile", {
+                metodo: "PATCH",
+                token,
+                body: { username: u, pais: p, ciudad: c },
+            });
+            setModalEditar(false);
+            Alert.alert("✓ Guardado", "Perfil actualizado correctamente");
+            await cargarTodo();
+        } catch (err: any) {
+            Alert.alert("Error", err?.message || "No se pudo actualizar el perfil");
+        } finally {
+            setGuardandoPerfil(false);
+        }
+    }
+
+    async function handleEliminarCuenta() {
+        Alert.alert(
+            "Eliminar cuenta",
+            "Esta acción es permanente. Se borrarán todos tus datos, check-ins y puntos. ¿Estás seguro?",
+            [
+                { text: "Cancelar", style: "cancel" },
+                {
+                    text: "Eliminar para siempre",
+                    style: "destructive",
+                    onPress: async () => {
+                        try {
+                            await hacerPeticion("/auth/me", { metodo: "DELETE", token });
+                            await cerrarSesion();
+                        } catch (err: any) {
+                            Alert.alert("Error", err?.message || "No se pudo eliminar la cuenta");
+                        }
+                    },
+                },
+            ]
+        );
     }
 
     async function handleCerrarSesion() {
@@ -398,6 +474,53 @@ export default function Perfil() {
                     </>
                 )}
 
+                {/* Historial de check-ins */}
+                {historial.length > 0 && (
+                    <View style={s.seccionCard}>
+                        <Text style={s.seccionTitulo}>Últimos check-ins</Text>
+                        {historial.slice(0, 10).map((c) => (
+                            <View key={c.id} style={s.historialFila}>
+                                <Text style={s.historialEmoji}>{c.icon_emoji || "🍺"}</Text>
+                                <View style={s.historialInfo}>
+                                    <Text style={s.historialNota} numberOfLines={1}>
+                                        {c.note || "Sin nota"}
+                                    </Text>
+                                    <Text style={s.historialFecha}>
+                                        {new Date(c.created_at).toLocaleDateString("es-ES")}
+                                        {c.precio ? `  ·  ${Number(c.precio).toFixed(2)} €` : ""}
+                                    </Text>
+                                </View>
+                                {c.foto_url && (
+                                    <Image source={{ uri: c.foto_url }} style={s.historialFoto} />
+                                )}
+                            </View>
+                        ))}
+                    </View>
+                )}
+
+                {/* Botón editar perfil */}
+                <Pressable
+                    style={({ pressed }) => [s.botonSecundario, pressed && { opacity: 0.7 }]}
+                    onPress={() => {
+                        setEditUsername(usuario.username || "");
+                        setEditPais(usuario.pais || "");
+                        setEditCiudad(usuario.ciudad || "");
+                        setModalEditar(true);
+                    }}
+                >
+                    <Ionicons name="create-outline" size={18} color="#10233E" />
+                    <Text style={s.botonSecundarioTexto}>Editar perfil</Text>
+                </Pressable>
+
+                {/* Botón eliminar cuenta */}
+                <Pressable
+                    style={({ pressed }) => [s.botonPeligro, pressed && { opacity: 0.7 }]}
+                    onPress={handleEliminarCuenta}
+                >
+                    <Ionicons name="trash-outline" size={18} color="#C0392B" />
+                    <Text style={s.botonPeligroTexto}>Eliminar cuenta</Text>
+                </Pressable>
+
                 {/* Cerrar sesión */}
                 <Pressable
                     style={({ pressed }) => [s.btnSalir, pressed && s.btnSalirPress]}
@@ -415,6 +538,58 @@ export default function Perfil() {
 
                 <Text style={s.version}>BeerMap v1.0</Text>
             </ScrollView>
+
+            {/* Modal editar perfil */}
+            <Modal visible={modalEditar} animationType="slide" transparent onRequestClose={() => setModalEditar(false)}>
+                <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === "ios" ? "padding" : undefined}>
+                    <Pressable style={s.modalOverlay} onPress={() => setModalEditar(false)}>
+                        <Pressable style={s.modalCard} onPress={() => {}}>
+                            <Text style={s.modalTitulo}>Editar perfil</Text>
+                            <Text style={s.modalLabel}>Nombre de usuario</Text>
+                            <TextInput
+                                style={s.modalInput}
+                                value={editUsername}
+                                onChangeText={setEditUsername}
+                                placeholder="Tu nombre de usuario"
+                                placeholderTextColor="#8A8A8A"
+                                autoCapitalize="none"
+                                maxLength={30}
+                            />
+                            <Text style={s.modalLabel}>País</Text>
+                            <TextInput
+                                style={s.modalInput}
+                                value={editPais}
+                                onChangeText={setEditPais}
+                                placeholder="Tu país"
+                                placeholderTextColor="#8A8A8A"
+                                maxLength={80}
+                            />
+                            <Text style={s.modalLabel}>Ciudad</Text>
+                            <TextInput
+                                style={s.modalInput}
+                                value={editCiudad}
+                                onChangeText={setEditCiudad}
+                                placeholder="Tu ciudad"
+                                placeholderTextColor="#8A8A8A"
+                                maxLength={80}
+                            />
+                            <Pressable
+                                style={[s.modalBoton, guardandoPerfil && { opacity: 0.6 }]}
+                                onPress={handleEditarPerfil}
+                                disabled={guardandoPerfil}
+                            >
+                                {guardandoPerfil
+                                    ? <ActivityIndicator color="#fff" />
+                                    : <Text style={s.modalBotonTexto}>Guardar cambios</Text>
+                                }
+                            </Pressable>
+                            <Pressable style={s.modalCancelar} onPress={() => setModalEditar(false)}>
+                                <Text style={s.modalCancelarTexto}>Cancelar</Text>
+                            </Pressable>
+                        </Pressable>
+                    </Pressable>
+                </KeyboardAvoidingView>
+            </Modal>
 
             {/* Modal cambiar contraseña */}
             <Modal visible={modalPassword} animationType="slide" transparent onRequestClose={() => setModalPassword(false)}>
@@ -651,4 +826,60 @@ const s = StyleSheet.create({
     passBtnTexto: { fontSize: 15, fontWeight: "700", color: "#FFFFFF" },
     passCancelar: { alignItems: "center", paddingVertical: 10 },
     passCancelarTexto: { fontSize: 14, color: "#9AAABB" },
+
+    // Botones de acción del perfil
+    botonSecundario: {
+        flexDirection: "row", alignItems: "center", justifyContent: "center",
+        gap: 8, height: 48, borderRadius: 12, borderWidth: 1,
+        borderColor: "#D0D7E3", backgroundColor: "#F8F9FB", marginBottom: 10,
+    },
+    botonSecundarioTexto: { fontSize: 15, fontWeight: "600", color: "#10233E" },
+    botonPeligro: {
+        flexDirection: "row", alignItems: "center", justifyContent: "center",
+        gap: 8, height: 48, borderRadius: 12, borderWidth: 1,
+        borderColor: "#F5C6C2", backgroundColor: "#FEF2F2", marginBottom: 10,
+    },
+    botonPeligroTexto: { fontSize: 15, fontWeight: "600", color: "#C0392B" },
+
+    // Modal editar perfil
+    modalOverlay: {
+        flex: 1, backgroundColor: "rgba(0,0,0,0.45)",
+        justifyContent: "flex-end",
+    },
+    modalCard: {
+        backgroundColor: "#fff", borderTopLeftRadius: 20, borderTopRightRadius: 20,
+        padding: 24, paddingBottom: 40,
+    },
+    modalTitulo: { fontSize: 18, fontWeight: "700", color: "#10233E", marginBottom: 20 },
+    modalLabel: { fontSize: 13, fontWeight: "600", color: "#10233E", marginBottom: 6 },
+    modalInput: {
+        height: 48, borderWidth: 1, borderColor: "#E2E8F0", borderRadius: 10,
+        paddingHorizontal: 14, fontSize: 15, color: "#10233E",
+        backgroundColor: "#F8F9FB", marginBottom: 14,
+    },
+    modalBoton: {
+        height: 50, backgroundColor: "#10233E", borderRadius: 12,
+        justifyContent: "center", alignItems: "center", marginTop: 4,
+    },
+    modalBotonTexto: { color: "#fff", fontSize: 16, fontWeight: "700" },
+    modalCancelar: { height: 44, justifyContent: "center", alignItems: "center", marginTop: 8 },
+    modalCancelarTexto: { fontSize: 14, color: "#6B85A8" },
+
+    // Historial de check-ins
+    seccionCard: {
+        backgroundColor: "#fff", borderRadius: 14, padding: 16,
+        marginBottom: 16,
+        shadowColor: "#000", shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.06, shadowRadius: 8, elevation: 2,
+    },
+    seccionTitulo: { fontSize: 15, fontWeight: "700", color: "#10233E", marginBottom: 12 },
+    historialFila: {
+        flexDirection: "row", alignItems: "center", paddingVertical: 10,
+        borderBottomWidth: 1, borderBottomColor: "#F0F2F5",
+    },
+    historialEmoji: { fontSize: 22, marginRight: 12 },
+    historialInfo: { flex: 1 },
+    historialNota: { fontSize: 14, fontWeight: "500", color: "#10233E" },
+    historialFecha: { fontSize: 12, color: "#6B85A8", marginTop: 2 },
+    historialFoto: { width: 44, height: 44, borderRadius: 8, marginLeft: 10 },
 });

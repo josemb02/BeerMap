@@ -254,3 +254,10 @@ class ResetPasswordRequest(BaseModel):
     token: str = Field(min_length=1)
     password_nuevo: str = Field(min_length=8, max_length=128)
 
+
+class UpdateProfileRequest(BaseModel):
+    """Datos para actualizar el perfil del usuario."""
+    username: str = Field(min_length=3, max_length=30)
+    pais: str = Field(min_length=2, max_length=80)
+    ciudad: str = Field(min_length=2, max_length=80)
+

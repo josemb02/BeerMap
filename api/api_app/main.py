@@ -48,8 +48,8 @@ from .config import settings
 from .database import get_db
 import httpx
 
-from .models import User, Checkin, UserPointsTotal, GroupMember, UserAuthProvider, PasswordResetToken
-from .schemas import RegisterRequest, LoginRequest, TokenResponse, RefreshRequest, AvatarUpdateRequest, GoogleAuthRequest, ChangePasswordRequest, ForgotPasswordRequest, ResetPasswordRequest
+from .models import User, Checkin, UserPointsTotal, GroupMember, UserAuthProvider, PasswordResetToken, RefreshToken
+from .schemas import RegisterRequest, LoginRequest, TokenResponse, RefreshRequest, AvatarUpdateRequest, GoogleAuthRequest, ChangePasswordRequest, ForgotPasswordRequest, ResetPasswordRequest, UpdateProfileRequest
 from .auth import (
     hash_password,
     verify_password,
@@ -614,6 +614,79 @@ def auth_me_avatar(
         "role": current_user.role,
         "avatar_url": current_user.avatar_url,
     }
+
+
+@app.patch("/auth/me/profile", status_code=200)
+def actualizar_perfil(
+    payload: UpdateProfileRequest,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """
+    Actualiza username, país y ciudad del usuario autenticado.
+    Verifica que el nuevo username no esté en uso por otro usuario.
+    """
+    username_limpio = payload.username.strip()
+    pais_limpio = payload.pais.strip()
+    ciudad_limpia = payload.ciudad.strip()
+
+    # Verificar que el username no lo tenga otro usuario
+    existente = db.query(User).filter(
+        User.username == username_limpio,
+        User.id != current_user.id,
+    ).first()
+    if existente:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Ese nombre de usuario ya está en uso",
+        )
+
+    current_user.username = username_limpio
+    current_user.pais = pais_limpio
+    current_user.ciudad = ciudad_limpia
+    db.commit()
+    db.refresh(current_user)
+
+    return {
+        "id": str(current_user.id),
+        "username": current_user.username,
+        "email": current_user.email,
+        "pais": current_user.pais,
+        "ciudad": current_user.ciudad,
+        "avatar_url": current_user.avatar_url,
+        "role": current_user.role,
+    }
+
+
+@app.delete("/auth/me", status_code=200)
+async def eliminar_cuenta(
+    request: Request,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """
+    Elimina permanentemente la cuenta del usuario autenticado y todos sus datos.
+    Requerido por Google Play y App Store desde 2023.
+    """
+    user_id = current_user.id
+
+    # Revocar todos los refresh tokens del usuario
+    db.query(RefreshToken).filter(
+        RefreshToken.user_id == user_id
+    ).delete()
+
+    # Eliminar el usuario (cascade elimina checkins, grupos, etc.)
+    db.delete(current_user)
+    db.commit()
+
+    write_audit_log(
+        db=db,
+        action="account_deleted",
+        request=request,
+        user_id=user_id,
+    )
+
+    return {"detail": "Cuenta eliminada correctamente"}
 
 
 # -------------------------------------------------------------------
