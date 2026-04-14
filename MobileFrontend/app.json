@@ -10,12 +10,12 @@
     "newArchEnabled": true,
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "com.josemb02.beermap"
+      "bundleIdentifier": "com.josemb02.beernow"
     },
     "android": {
       "edgeToEdgeEnabled": true,
       "predictiveBackGestureEnabled": false,
-      "package": "com.josemb02.beermap"
+      "package": "com.josemb02.beernow"
     },
     "web": {
       "output": "static",

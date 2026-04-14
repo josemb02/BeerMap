@@ -47,3 +47,9 @@ export const CLAVE_TOKEN = "beermap_token";
  * Se guarda por separado del access token para mayor claridad.
  */
 export const CLAVE_REFRESH_TOKEN = "beermap_refresh_token";
+
+/*
+ * Clave para guardar en SecureStore si el usuario ya vio el onboarding.
+ * Si existe y vale "true", no se muestra el onboarding al abrir la app.
+ */
+export const CLAVE_ONBOARDING_VISTO = "beernow_onboarding_visto";

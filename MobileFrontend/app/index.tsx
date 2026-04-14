@@ -1,30 +1,34 @@
+import { useEffect, useState } from "react";
 import { Image, StyleSheet, View } from "react-native";
 import { Redirect } from "expo-router";
+import * as SecureStore from "expo-secure-store";
 import { usarAuth } from "../contexto/ContextoAuth";
+import { CLAVE_ONBOARDING_VISTO } from "../utils/constantes";
 
 /*
  * Pantalla de entrada de la app.
  *
- * Único responsable: decidir si el usuario va al mapa o al login.
+ * Decide a dónde va el usuario:
+ * 1. Si hay sesión activa → /(principal)/mapa
+ * 2. Si no hay sesión pero ya vio el onboarding → /login
+ * 3. Si nunca vio el onboarding → /onboarding
  *
- * Patrón oficial de expo-router para auth-gating:
- *   - usar <Redirect> en lugar de useRouter() + useEffect
- *   - <Redirect> no añade hooks propios, elimina la fuente del crash
- *
- * POR QUÉ se reescribió:
- *   El código anterior llamaba a useRouter() tras usarAuth().
- *   useRouter() usa hooks internos cuyo número varía según el estado
- *   de navegación de expo-router, lo que desplazaba el useRef de posición
- *   entre renders y disparaba "Rules of Hooks:
- *   Previous render: useContext / Next render: useRef".
+ * Mientras carga la sesión y el estado del onboarding
+ * muestra el logo como splash screen.
  */
 export default function Index() {
-    // ÚNICO hook del componente — siempre se llama en primer lugar,
-    // nunca dentro de un if, nunca después de un return temprano.
     const { usuario, cargando } = usarAuth();
+    const [onboardingVisto, setOnboardingVisto] = useState<boolean | null>(null);
 
-    // Mientras la sesión carga mostramos el logo como splash screen
-    if (cargando) {
+    useEffect(() => {
+        // Comprobar si el usuario ya vio el onboarding
+        SecureStore.getItemAsync(CLAVE_ONBOARDING_VISTO).then((valor) => {
+            setOnboardingVisto(valor === "true");
+        });
+    }, []);
+
+    // Mostrar splash mientras carga la sesión o el estado del onboarding
+    if (cargando || onboardingVisto === null) {
         return (
             <View style={styles.contenedor}>
                 <Image
@@ -36,8 +40,18 @@ export default function Index() {
         );
     }
 
-    // Sesión resuelta — Redirect navega sin añadir hooks extra
-    return <Redirect href={usuario ? "/(principal)/mapa" : "/login"} />;
+    // Sesión activa → al mapa
+    if (usuario) {
+        return <Redirect href="/(principal)/mapa" />;
+    }
+
+    // Sin sesión pero onboarding ya visto → login
+    if (onboardingVisto) {
+        return <Redirect href="/login" />;
+    }
+
+    // Primera vez → onboarding
+    return <Redirect href={"/onboarding" as never} />;
 }
 
 const styles = StyleSheet.create({
