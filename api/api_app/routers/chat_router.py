@@ -19,7 +19,7 @@
 
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException, Request, status
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 from sqlalchemy import desc
 from sqlalchemy.orm import Session
 
@@ -184,6 +184,8 @@ def enviar_mensaje_grupo(
 @router.get("/group/{group_id}", response_model=list[MessageResponse])
 def listar_mensajes_grupo(
     group_id: UUID,
+    limite: int = Query(default=100, ge=1, le=500),
+    offset: int = Query(default=0, ge=0),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
@@ -218,7 +220,7 @@ def listar_mensajes_grupo(
         GroupMessage.group_id == group_id
     ).order_by(
         desc(GroupMessage.created_at)
-    ).all()
+    ).offset(offset).limit(limite).all()
 
     respuesta = []
 

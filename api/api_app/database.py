@@ -23,7 +23,11 @@ if DATABASE_URL is None or DATABASE_URL.strip() == "":
 # Engine = conexión principal a la BD
 engine = create_engine(
     DATABASE_URL,
-    pool_pre_ping=True,  # evita conexiones muertas en Docker
+    pool_pre_ping=True,   # evita conexiones muertas en Railway
+    pool_size=10,         # conexiones permanentes en el pool
+    max_overflow=20,      # conexiones extra permitidas en picos de carga
+    pool_timeout=30,      # segundos máximos esperando una conexión libre
+    pool_recycle=1800,    # reciclar conexiones cada 30 minutos
     future=True
 )
 

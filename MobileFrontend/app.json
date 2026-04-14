@@ -10,7 +10,14 @@
     "newArchEnabled": true,
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "com.josemb02.beernow"
+      "bundleIdentifier": "com.josemb02.beernow",
+      "infoPlist": {
+        "NSLocationWhenInUseUsageDescription": "BeerNow needs your location to record where you enjoyed each beer.",
+        "NSLocationAlwaysUsageDescription": "BeerNow needs your location to record where you enjoyed each beer.",
+        "NSPhotoLibraryUsageDescription": "BeerNow needs access to your photos so you can add images to your check-ins and change your avatar.",
+        "NSPhotoLibraryAddUsageDescription": "BeerNow needs permission to save photos to your gallery.",
+        "NSCameraUsageDescription": "BeerNow needs access to your camera so you can take photos for your check-ins."
+      }
     },
     "android": {
       "edgeToEdgeEnabled": true,
