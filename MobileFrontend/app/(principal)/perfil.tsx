@@ -469,27 +469,6 @@ export default function Perfil() {
                         <Text style={[s.filaLabel, { flex: 1 }]}>{t("perfil.cambiar_password")}</Text>
                         <Ionicons name="chevron-forward" size={16} color="#C0BAB0" />
                     </Pressable>
-                    <View style={s.cardSep} />
-                    <View style={s.filaInfo}>
-                        <View style={s.filaIcono}>
-                            <Ionicons name="language-outline" size={16} color="#6B85A8" />
-                        </View>
-                        <Text style={[s.filaLabel, { flex: 1 }]}>{t("perfil.idioma")}</Text>
-                        <View style={s.idiomaOpciones}>
-                            <Pressable
-                                style={[s.idiomaBtn, obtenerIdioma() === "es" && s.idiomaBtnActivo]}
-                                onPress={() => cambiarIdioma("es")}
-                            >
-                                <Text style={[s.idiomaBtnTexto, obtenerIdioma() === "es" && s.idiomaBtnTextoActivo]}>ES</Text>
-                            </Pressable>
-                            <Pressable
-                                style={[s.idiomaBtn, obtenerIdioma() === "en" && s.idiomaBtnActivo]}
-                                onPress={() => cambiarIdioma("en")}
-                            >
-                                <Text style={[s.idiomaBtnTexto, obtenerIdioma() === "en" && s.idiomaBtnTextoActivo]}>EN</Text>
-                            </Pressable>
-                        </View>
-                    </View>
                 </View>
 
                 {/* Info ubicación */}
@@ -527,6 +506,26 @@ export default function Perfil() {
                         ))}
                     </View>
                 )}
+
+                {/* Selector de idioma */}
+                <View style={s.filaIdioma}>
+                    <Ionicons name="language-outline" size={20} color="#6B85A8" />
+                    <Text style={s.filaIdiomaTexto}>{t("perfil.idioma")}</Text>
+                    <View style={s.idiomaOpciones}>
+                        <Pressable
+                            style={[s.idiomaBtn, obtenerIdioma() === "es" && s.idiomaBtnActivo]}
+                            onPress={() => cambiarIdioma("es")}
+                        >
+                            <Text style={[s.idiomaBtnTexto, obtenerIdioma() === "es" && s.idiomaBtnTextoActivo]}>ES</Text>
+                        </Pressable>
+                        <Pressable
+                            style={[s.idiomaBtn, obtenerIdioma() === "en" && s.idiomaBtnActivo]}
+                            onPress={() => cambiarIdioma("en")}
+                        >
+                            <Text style={[s.idiomaBtnTexto, obtenerIdioma() === "en" && s.idiomaBtnTextoActivo]}>EN</Text>
+                        </Pressable>
+                    </View>
+                </View>
 
                 {/* Botón editar perfil */}
                 <Pressable
@@ -896,10 +895,12 @@ const s = StyleSheet.create({
     modalCancelarTexto: { fontSize: 14, color: "#6B85A8" },
 
     // Selector de idioma
-    idiomaOpciones: { flexDirection: "row", gap: 4 },
-    idiomaBtn: { paddingHorizontal: 12, paddingVertical: 5, borderRadius: 8, borderWidth: 1, borderColor: "#D0D7E3", backgroundColor: "#F8F9FB" },
+    filaIdioma: { flexDirection: "row", alignItems: "center", gap: 10, marginBottom: 12, paddingHorizontal: 4 },
+    filaIdiomaTexto: { flex: 1, fontSize: 14, color: "#6B85A8", fontWeight: "500" as const },
+    idiomaOpciones: { flexDirection: "row", gap: 6 },
+    idiomaBtn: { paddingHorizontal: 14, paddingVertical: 6, borderRadius: 20, borderWidth: 1, borderColor: "#D0D7E3", backgroundColor: "#F8F9FB" },
     idiomaBtnActivo: { backgroundColor: "#10233E", borderColor: "#10233E" },
-    idiomaBtnTexto: { fontSize: 13, fontWeight: "700" as const, color: "#6B85A8" },
+    idiomaBtnTexto: { fontSize: 13, fontWeight: "600" as const, color: "#6B85A8" },
     idiomaBtnTextoActivo: { color: "#FFFFFF" },
 
     // Historial de check-ins

@@ -125,7 +125,7 @@ export default function Ranking() {
 
     // Tabs de ámbito: siempre Global, más País y Ciudad si el usuario los tiene
     const tabsAmbito: { key: Ambito; label: string }[] = [
-        { key: "global", label: "Global" },
+        { key: "global", label: t("ranking.global") },
         ...(usuario?.pais   ? [{ key: "pais"   as Ambito, label: usuario.pais }]   : []),
         ...(usuario?.ciudad ? [{ key: "ciudad" as Ambito, label: usuario.ciudad }] : []),
     ];

@@ -502,7 +502,7 @@ function ModalUnirse({ visible, token, onCerrar, onExito }: {
                         <Text style={s.fieldLabel}>{t("grupos.codigo_invitacion")}</Text>
                         <TextInput
                             value={codigo} onChangeText={val => setCodigo(val.toUpperCase())}
-                            placeholder="ej: AB12CD" placeholderTextColor="#B0BAC8"
+                            placeholder={t("grupos.codigo_placeholder")} placeholderTextColor="#B0BAC8"
                             maxLength={10} autoCapitalize="characters" autoCorrect={false}
                             style={[s.input, s.inputCodigo]} autoFocus
                         />
