@@ -1035,6 +1035,10 @@ def refresh_token(
     - OWASP A07: rotación de tokens reduce impacto de filtración
     - OWASP A09: trazabilidad de cada renovación
     """
+    # Rate limit: máximo 20 renovaciones por hora por IP
+    ip = getattr(request.state, "client_ip", "unknown")
+    rate_limit(key=f"refresh:{ip}", max_requests=20, window_seconds=3600)
+
     # Verificamos el refresh token y obtenemos usuario + registro BD
     user, refresh_record = verify_refresh_token(payload.refresh_token, db)
 

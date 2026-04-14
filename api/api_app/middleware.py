@@ -38,9 +38,14 @@ def get_client_ip(request: Request) -> str:
     Devuelve la IP del cliente de la forma más razonable posible.
 
     Qué hace:
-    - Si hay cabecera X-Forwarded-For, usa la primera IP.
+    - Si hay cabecera X-Forwarded-For, usa la ÚLTIMA IP (añadida por Railway).
     - Si no, usa request.client.host.
     - Si no puede obtenerla, devuelve 'unknown'.
+
+    Por qué la última y no la primera:
+    - La primera IP la puede falsificar el cliente.
+    - Railway siempre añade la IP real del cliente al final de la cadena,
+      por lo que esa posición no es falsificable desde el exterior.
 
     Esto sirve para:
     - logs
@@ -49,11 +54,9 @@ def get_client_ip(request: Request) -> str:
     """
     xff = request.headers.get("x-forwarded-for")
     if xff is not None and xff.strip() != "":
-        parts = xff.split(",")
-        if len(parts) > 0:
-            ip = parts[0].strip()
-            if ip != "":
-                return ip
+        partes = [p.strip() for p in xff.split(",") if p.strip()]
+        if partes:
+            return partes[-1]
 
     if request.client is not None and request.client.host is not None:
         return str(request.client.host)

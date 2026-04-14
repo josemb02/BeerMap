@@ -151,12 +151,14 @@ export default function Perfil() {
         if (!token) return;
         try {
             setRefrescando(true);
-            const [dataStats, dataRachas] = await Promise.all([
+            const [dataStats, dataRachas, dataHistorial] = await Promise.all([
                 obtenerMisStats(token),
                 obtenerMisRachas(token),
+                hacerPeticion("/checkins/my-history?limite=20", { metodo: "GET", token }),
             ]);
             setStats(dataStats);
             setRachas(dataRachas);
+            setHistorial(dataHistorial || []);
         } catch {}
         finally { setRefrescando(false); }
     }
