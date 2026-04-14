@@ -180,6 +180,8 @@ class CheckinResponse(BaseModel):
     note: Optional[str]
     foto_url: Optional[str]
     icon_emoji: Optional[str]
+    # Fecha de creación — necesaria para el historial del perfil
+    created_at: Optional[datetime] = None
 
 
 class MapCheckinResponse(BaseModel):

@@ -394,6 +394,7 @@ def obtener_mi_historial(
             note=c.note,
             foto_url=c.foto_url,
             icon_emoji=c.icon_emoji,
+            created_at=c.created_at,
         )
         for c in checkins
     ]
