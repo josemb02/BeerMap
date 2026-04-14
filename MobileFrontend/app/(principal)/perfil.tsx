@@ -264,8 +264,16 @@ export default function Perfil() {
                     style: "destructive",
                     onPress: async () => {
                         try {
-                            await hacerPeticion("/auth/me", { metodo: "DELETE", token });
+                            // Primero cerrar sesión localmente para limpiar tokens
+                            // antes de llamar al backend, así evitamos el error
+                            // de token inválido al intentar refrescar después
                             await cerrarSesion();
+                            // Luego intentar eliminar en el backend (best effort)
+                            try {
+                                await hacerPeticion("/auth/me", { metodo: "DELETE", token });
+                            } catch {
+                                // Si falla el backend no importa — ya cerramos sesión local
+                            }
                         } catch (err: any) {
                             Alert.alert("Error", err?.message || "No se pudo eliminar la cuenta");
                         }
@@ -482,7 +490,7 @@ export default function Perfil() {
                 {historial.length > 0 && (
                     <View style={s.seccionCard}>
                         <Text style={s.seccionTitulo}>Últimos check-ins</Text>
-                        {historial.slice(0, 10).map((c) => (
+                        {historial.slice(0, 5).map((c) => (
                             <View key={c.id} style={s.historialFila}>
                                 <Text style={s.historialEmoji}>{c.icon_emoji || "🍺"}</Text>
                                 <View style={s.historialInfo}>

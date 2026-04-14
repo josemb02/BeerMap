@@ -335,7 +335,7 @@ export default function Registro() {
                                 {/* Aviso edad mínima obligatorio */}
                                 <View style={styles.avisoEdad}>
                                     <Text style={styles.avisoEdadTexto}>
-                                        🔞 BeerNow es solo para mayores de 18 años
+                                        BeerNow es solo para mayores de 18 años
                                     </Text>
                                 </View>
 
@@ -652,17 +652,17 @@ const styles = StyleSheet.create({
         fontWeight: "700",
     },
     avisoEdad: {
-        backgroundColor: "#FFF3CD",
-        borderRadius: 10,
-        padding: 12,
-        marginBottom: 12,
-        borderWidth: 1,
-        borderColor: "#FFE082",
+        backgroundColor: "#F8F9FB",
+        borderRadius: 8,
+        paddingVertical: 8,
+        paddingHorizontal: 12,
+        marginBottom: 10,
+        borderLeftWidth: 3,
+        borderLeftColor: "#10233E",
     },
     avisoEdadTexto: {
-        fontSize: 13,
-        color: "#856404",
-        fontWeight: "600",
-        textAlign: "center",
+        fontSize: 12,
+        color: "#4E5968",
+        fontWeight: "500",
     },
 });

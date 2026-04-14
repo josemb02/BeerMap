@@ -80,6 +80,16 @@ export default function Tienda() {
             setCargandoVideo(true);
             // Mostrar el vídeo — AdMob verificará SSV con el backend automáticamente
             const completo = await mostrarAnuncioRecompensado();
+
+            // En Expo Go AdMob no está disponible — avisar al usuario
+            if (!completo) {
+                Alert.alert(
+                    "Vídeo no disponible",
+                    "Los vídeos recompensados solo funcionan en la app instalada. Descarga BeerNow para ganar puntos."
+                );
+                return;
+            }
+
             if (completo) {
                 // Esperar un momento para que el SSV de AdMob llegue al backend
                 await new Promise(resolve => setTimeout(resolve, 2000));
@@ -146,28 +156,28 @@ export default function Tienda() {
                 </View>
             ) : (
                 <>
-                    {/* Sección de vídeo recompensado */}
-                    <View style={s.seccionVideo}>
-                        <Text style={s.videoTitulo}>¿Quieres más puntos? 🎬</Text>
-                        <Text style={s.videoSubtitulo}>
-                            Ve un vídeo corto y gana 20 puntos gratis
-                        </Text>
-                        <Pressable
-                            style={({ pressed }) => [
-                                s.botonVideo,
-                                pressed && s.botonVideoPulsado,
-                                cargandoVideo && s.botonDeshabilitado,
-                            ]}
-                            onPress={manejarVerVideo}
-                            disabled={cargandoVideo}
-                        >
-                            {cargandoVideo ? (
-                                <ActivityIndicator color="#fff" />
-                            ) : (
-                                <Text style={s.textoBotonVideo}>▶ Ver vídeo +20 pts</Text>
-                            )}
-                        </Pressable>
-                    </View>
+                    {/* Puntos extra — vídeo recompensado */}
+                    <Pressable
+                        style={({ pressed }) => [
+                            s.filaVideo,
+                            pressed && { opacity: 0.75 },
+                            cargandoVideo && s.botonDeshabilitado,
+                        ]}
+                        onPress={manejarVerVideo}
+                        disabled={cargandoVideo}
+                    >
+                        <View style={s.filaVideoIcono}>
+                            <Text style={s.filaVideoEmoji}>▶</Text>
+                        </View>
+                        <View style={s.filaVideoTextos}>
+                            <Text style={s.filaVideoTitulo}>Ver un vídeo corto</Text>
+                            <Text style={s.filaVideoSub}>Gana 20 puntos gratis</Text>
+                        </View>
+                        {cargandoVideo
+                            ? <ActivityIndicator color="#10233E" size="small" />
+                            : <Text style={s.filaVideoPts}>+20 pts</Text>
+                        }
+                    </Pressable>
 
                     <FlatList
                     data={iconos}
@@ -330,40 +340,52 @@ const s = StyleSheet.create({
     btnDeshabilitado: { backgroundColor: "#E2E8F0" },
     btnTextoDeshabilitado: { fontSize: 12, fontWeight: "600", color: "#9AAABB" },
 
-    // Sección vídeo recompensado
-    seccionVideo: {
-        backgroundColor: "#FFF8E7",
+    // Fila de vídeo recompensado
+    filaVideo: {
+        flexDirection: "row",
+        alignItems: "center",
+        backgroundColor: "#FFFFFF",
         borderRadius: 14,
-        padding: 18,
         marginHorizontal: 16,
         marginBottom: 16,
+        padding: 14,
         borderWidth: 1,
-        borderColor: "#FFE082",
+        borderColor: "#E8EBF0",
+        gap: 12,
+    },
+    filaVideoIcono: {
+        width: 40,
+        height: 40,
+        borderRadius: 10,
+        backgroundColor: "#F0F4FF",
+        justifyContent: "center",
         alignItems: "center",
     },
-    videoTitulo: {
+    filaVideoEmoji: {
         fontSize: 16,
+        color: "#10233E",
+    },
+    filaVideoTextos: {
+        flex: 1,
+    },
+    filaVideoTitulo: {
+        fontSize: 14,
+        fontWeight: "600",
+        color: "#10233E",
+    },
+    filaVideoSub: {
+        fontSize: 12,
+        color: "#6B85A8",
+        marginTop: 2,
+    },
+    filaVideoPts: {
+        fontSize: 13,
         fontWeight: "700",
         color: "#10233E",
-        marginBottom: 4,
-    },
-    videoSubtitulo: {
-        fontSize: 13,
-        color: "#6B85A8",
-        marginBottom: 14,
-        textAlign: "center",
-    },
-    botonVideo: {
-        backgroundColor: "#F5A623",
-        borderRadius: 10,
-        paddingVertical: 12,
-        paddingHorizontal: 28,
-    },
-    botonVideoPulsado: { opacity: 0.85 },
-    textoBotonVideo: {
-        color: "#fff",
-        fontWeight: "700",
-        fontSize: 15,
+        backgroundColor: "#F0F4FF",
+        paddingHorizontal: 10,
+        paddingVertical: 4,
+        borderRadius: 20,
     },
     botonDeshabilitado: { opacity: 0.65 },
 });
