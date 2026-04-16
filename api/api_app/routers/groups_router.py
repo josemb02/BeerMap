@@ -33,6 +33,7 @@ from ..notificaciones import enviar_notificacion_a_usuario
 from ..schemas import CreateGroupRequest, JoinGroupRequest, GroupResponse
 from ..auth import get_current_user
 from ..audit import write_audit_log
+from ..ratelimit import rate_limit
 
 
 # -------------------------------------------------------------------
@@ -76,6 +77,9 @@ def crear_grupo(
     """
     Crea un grupo nuevo.
     """
+    # Rate limit: máximo 5 grupos creados por hora por usuario
+    rate_limit(key=f"crear_grupo:{current_user.id}", max_requests=5, window_seconds=3600)
+
     nombre_limpio = payload.name.strip()
 
     grupos_del_usuario = db.query(Group).filter(
@@ -144,6 +148,9 @@ def unirse_a_grupo(
     """
     Une al usuario autenticado a un grupo mediante su join_code.
     """
+    # Rate limit: máximo 10 intentos de unirse por hora por usuario
+    rate_limit(key=f"unirse_grupo:{current_user.id}", max_requests=10, window_seconds=3600)
+
     codigo_limpio = payload.join_code.strip().upper()
 
     grupo = db.query(Group).filter(Group.join_code == codigo_limpio).first()

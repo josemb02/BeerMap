@@ -28,6 +28,7 @@ from ..auth import get_current_user
 from ..database import get_db
 from ..models import Group, GroupMember, GroupMessage, User
 from ..notificaciones import enviar_notificacion_a_usuario
+from ..ratelimit import rate_limit
 from ..schemas import MessageResponse, SendMessageRequest
 
 
@@ -109,6 +110,9 @@ def enviar_mensaje_grupo(
     - OWASP A09 Logging and Monitoring Failures:
       se registra la acción en audit_logs
     """
+    # Rate limit: máximo 30 mensajes por minuto por usuario
+    rate_limit(key=f"chat:{current_user.id}", max_requests=30, window_seconds=60)
+
     # ---------------------------------------------------------------
     # Se valida que el usuario pueda escribir en ese grupo
     # ---------------------------------------------------------------
