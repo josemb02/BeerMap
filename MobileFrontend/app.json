@@ -1,7 +1,7 @@
 {
   "expo": {
     "name": "BeerNow",
-    "slug": "beernow",
+    "slug": "MobileFrontend",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/imagenes/BeerNow_icon_1024.png",
